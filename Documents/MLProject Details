@@ -1,0 +1,243 @@
+# Machine Learning
+
+# Introduction
+
+**1\. Project Overview**
+
+The project aims to develop an artificial intelligence system capable of accurately recognizing and extracting metadata from both the traditional South African ID book and the new smart ID card formats. This system will support legitimate identity verification processes while maintaining high security and privacy standards.
+
+**2\. Scope of Work**
+
+**2.1 System Development**
+
+The contractor shall:
+
+* Develop an AI model capable of recognizing and distinguishing between:  
+  * Traditional green bar-coded ID book  
+  * New smart ID card  
+* Implement robust image processing capabilities to handle various lighting conditions, angles, and image qualities  
+* Extract name, identity number, and date of birth for each document into JSON format  
+* Ability to extract and save the photograph of the participant for further processing in facial recognition
+
+**2.2 Technical Requirements**
+
+* Minimum 99% accuracy in document type classification  
+* Minimum 1% error in metadata extraction rate  
+* Maximum 10-second processing time per document  
+* Ability to handle common image formats (JPEG, PNG, TIFF)  
+* Error handling for poor quality images with appropriate user feedback
+
+**2.3 Data Requirements**
+
+The contractor must:
+
+* Keep sample documents provided for training confidential  
+* Implement data augmentation techniques to expand training dataset  
+* Ensure compliance with POPIA regarding data handling  
+* Maintain detailed documentation of data sources and usage
+
+**3\. Deliverables**
+
+**3.1 Development Phase**
+
+* Detailed project plan and timeline  
+* Regular progress reports (weekly)  
+* Training dataset documentation  
+* Model architecture documentation  
+* Test plans and procedures
+
+**3.2 Final Deliverables**
+
+* Trained AI model meeting accuracy requirements  
+* API documentation for system integration  
+* User manual and technical documentation  
+* Security audit report  
+* Performance benchmark results
+
+**4\. Timeline**
+
+* Project Duration: 1 month  
+* Key Milestones:  
+  * Week 1: Project setup and data collection  
+  * Week 2-3: Model development and initial training  
+  * Week 4: Testing and optimization  
+  * Week 4: Final testing and documentation
+
+**8\. Intellectual Property**
+
+All intellectual property developed during the project, including:
+
+* Source code  
+* Training methodologies  
+* Model architecture  
+* Documentation shall become the property of the client upon project completion.
+
+# Work Plan
+
+**Phase 1: Baseline Assessment and Data Preparation**
+
+1. **Initial Data Acquisition and Audit:**  
+     
+   * Acquire the full dataset of 1000 South African ID images (both green bar-coded books and smart ID cards).  
+   * Conduct an initial data audit to document the characteristics of the dataset, including:  
+     * Distribution of ID types (number of samples per class)  
+     * Variety in image quality, lighting conditions, and angles.  
+     * Availability and quality of existing ground truth information (if any).
+
+   
+
+2. **OCR Baseline Performance Evaluation:** (*Using Tesseract v5 and EasyOCR*)  
+     
+   * **Image Preprocessing (Subset):** Preprocess a subset of 100 images to assess and determine suitable preprocessing methods and parameters.  
+   * **OCR Testing (Subset):** Apply both Tesseract v5 ([https://github.com/tesseract-ocr/tesseract](https://github.com/tesseract-ocr/tesseract)) and EasyOCR ([https://github.com/JaidedAI/EasyOCR](https://github.com/JaidedAI/EasyOCR)) to the preprocessed subset of 100 images.  
+   * **Field Extraction (Subset):** Extract specific fields (name, identity number, date of birth) from the OCR output.  
+   * **Accuracy Assessment (Subset):** Compare the extracted information with ground truth to evaluate the baseline accuracy of OCR. This evaluation will be limited to assessing if the OCR engine can correctly read text on the documents and if the outputs can be correctly processed.  
+   * **Document Findings:** Create a report containing all the information collected from this initial analysis.
+
+   
+
+3. **Decision Point: OCR Efficacy**  
+     
+   * **OCR Performance:** Analyze results and make an evaluation based on metrics obtained from the previous step. If OCR performance meets the required accuracy and performance guidelines, proceed to integrate with the rest of the system components.  
+   * **If OCR performance is inadequate:** Proceed with Phase 2\.
+
+   
+
+4. **Document Classification Preliminary Investigation:**  
+     
+   * Manually examine a subset of images to see if there are features that can allow manual classification of different document types.
+
+**Phase 2: (To Be Initiated if OCR Fails) Model Training**
+
+1. **Data Annotation:** Annotate the dataset for document classification, text extraction, and object detection (if required):  
+     
+   * Prepare the data for model training.  
+   * Annotate ID type for each image.  
+   * Annotate bounding boxes around text fields for OCR and ground-truth matching.  
+   * Annotate bounding boxes around faces for face detection (if required).
+
+   
+
+2. **Model Training:** Train models for each of the necessary tasks:  
+     
+   * Train document classification model (if necessary) using the annotated data and techniques identified in the prior model research. Possible models include EfficientNetV2 ([https://github.com/google/automl/tree/master/efficientnetv2](https://github.com/google/automl/tree/master/efficientnetv2)), ResNet50 ([https://pytorch.org/vision/stable/models/resnet.html](https://pytorch.org/vision/stable/models/resnet.html)), MobileNetV3 ([https://pytorch.org/vision/stable/models/mobilenetv3.html](https://pytorch.org/vision/stable/models/mobilenetv3.html)).  
+   * Train OCR fine-tuned model (if necessary) if required using the labelled text fields. Possible models include PaddleOCR ([https://github.com/PaddlePaddle/PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)), and CRNN ([https://github.com/meijieru/crnn.pytorch](https://github.com/meijieru/crnn.pytorch)).  
+   * Train face detection model (if necessary). Possible models include MTCNN ([https://github.com/timesler/facenet-pytorch](https://github.com/timesler/facenet-pytorch)), RetinaFace ([https://github.com/biubug6/Pytorch\_Retinaface](https://github.com/biubug6/Pytorch_Retinaface)), BlazeFace ([https://github.com/tensorflow/tfjs-models/tree/master/blazeface](https://github.com/tensorflow/tfjs-models/tree/master/blazeface)).
+
+   
+
+3. **Evaluation:** Evaluate performance for each model and iterate based on results.
+
+\*Note: The following sections will be developed further after phase 1:
+
+* Image Preprocessing and Augmentation (will be based on findings from phase 1\)  
+* Structured Field Extraction (Will be implemented if OCR is not enough)  
+* Face/Photo Extraction (Will be implemented if OCR is not enough)
+
+# Tech Stack Summary
+
+| Component | Technology |
+| :---- | :---- |
+| Document Classification | EfficientNetV2, ResNet50, MobileNetV3 (or similar) |
+| Data Annotation | SAM2, Label Studio, RoboFlow Annotation |
+| OCR / Text Extraction | Tesseract v5, EasyOCR, PaddleOCR, CRNN (or similar) |
+| Face/Photo Extraction | MTCNN, RetinaFace, BlazeFace (or similar) |
+| Image Preprocessing | OpenCV |
+| Data Augmentation | imgaug |
+
+# OCR / Text Extraction
+
+Below is a summarized comparison table of four popular OCR models—**Tesseract**, **EasyOCR**, **PaddleOCR**, and **KerasOCR**—focusing on their suitability for ID document recognition tasks, performance, licensing, and other relevant details. Although exact speed and accuracy figures can differ based on hardware and data quality, these approximations are drawn from publicly available benchmarks and user experiences in the referenced sources.
+
+| OCR Model | License / Source | Typical Processing Speed | Accuracy (General Text) | Environment / Requirements | Pros | Cons | Relevant Sources |
+| :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
+| **Tesseract** | \- Open Source (Apache 2.0)  \- Maintained by Google | \- Fast on CPU for documents  (\~0.2–1.0 sec/img)\* \[8\] | \- \~90–98% for clean print  (varies by languages/layout) \[2\]\[5\]\[7\] | \- Written in C++  \- Python wrappers available (PyTesseract) \- No GPU support needed | \- Excellent for well-scanned documents  \- Supports 100+ languages \- Easy to integrate and widely documented | \- Accuracy drops with poor-quality or rotated images without heavy preprocessing  \- Fine-tuning is somewhat cumbersome \[4\] | \[2\]\[5\]\[7\]\[8\] |
+| **EasyOCR** | \- Open Source (Apache 2.0)  \- PyTorch-based | \- Moderate to fast on GPU  (\~0.2–3.0 sec/img)\* \[1\]\[4\]\[7\] | \- \~88–95% in practice, can reach higher with good preprocessing \[1\]\[2\] | \- Requires PyTorch  \- Benefits from GPU acceleration \- CPU support possible (slower) | \- Simple, high-level API  \- Good multilingual coverage \- Easier fine-tuning than Tesseract \[4\] | \- Slower on CPU vs. Tesseract  \- May need additional steps for ID-specific fonts/formats | \[1\]\[2\]\[4\]\[7\] |
+| **PaddleOCR** | \- Open Source (Apache 2.0)  \- Developed by Baidu | \- Slightly slower on CPU, faster on GPU  (\~0.3–1.5 sec/img)\* \[5\]\[7\] | \- \~92–95% out of the box  Excellent for Chinese & multi-lingual \[5\]\[7\] | \- Python-based  \- GPU recommended for real-time \- Includes detection & recognition pipelines | \- Strong at multi-language tasks  \- Good for ID-like documents \- Flexible, end-to-end OCR pipeline | \- Documentation heavily focused on Chinese texts  \- Some models need additional fine-tuning for Western scripts | \[2\]\[5\]\[7\] |
+| **KerasOCR** | \- Open Source (MIT)  \- Built on Keras/TensorFlow | \- Slower than Tesseract/EAST for detection  (\~1–4 sec/img)\* \[8\] | \- \~90–95% depending on dataset  Good for end-to-end pipelines \[6\]\[8\] | \- Requires Python (Keras/TensorFlow)  \- Often faster with GPU \- Modular detection & recognition | \- Good accuracy when carefully trained  \- End-to-end approach for text detection & recognition \- Flexible visualizations \[8\] | \- Slower inference times vs. Tesseract or PaddleOCR  \- Must configure detection first, then recognition steps | \[6\]\[8\] |
+
+\*Processing speed estimates are rough averages and can vary depending on system hardware (CPU vs. GPU), resolution of input images, and specific implementation details.
+
+---
+
+## **Key Observations for ID Document Projects**
+
+1. **Open-Source and Local Hosting**  
+   All four models are open-source and can be self-hosted without API/license fees. This is crucial for projects needing full data privacy (e.g., POPIA compliance).  
+     
+2. **Accuracy vs. Preprocessing**  
+     
+   - Tesseract can achieve high accuracy on clean scans but requires more involved preprocessing for rotation correction or variable lighting.  
+   - EasyOCR and PaddleOCR handle more “in-the-wild” imagery better but may need a GPU for real-time speeds.  
+   - KerasOCR provides a flexible end-to-end pipeline but can be slower.
+
+   
+
+3. **Fine-tuning & Custom Fonts**  
+     
+   - **Tesseract** supports custom training, but it’s often described as cumbersome, especially for updating recognition of new fonts or character sets \[4\].  
+   - **EasyOCR** and **PaddleOCR** are generally easier to fine-tune with additional training data specific to ID documents \[4\]\[5\].  
+   - **KerasOCR** can be adapted for custom tasks but typically needs more computing power and configuration.
+
+   
+
+4. **ID-Specific Artwork & Layout**  
+     
+   - Many ID documents have specialized fonts, security backgrounds, and unusual layout. Tools like OpenCV for image cleaning (e.g., contrast enhancement, rotation correction) remain essential.  
+   - Combining these OCR models with a structured field extraction library (e.g., LayoutLM) can help parse the final text fields accurately if the layout is complex.
+
+   
+
+5. **Speed Requirements**  
+     
+   - For high-volume or near-real-time scenarios, GPU acceleration can be critical.  
+   - Tesseract is generally CPU-friendly and fast on well-prepared, clean documents, making it a good baseline if primarily dealing with consistent angles and quality \[7\]\[8\].  
+   - EasyOCR and PaddleOCR scale well with GPU usage for more complex or lower-quality images \[4\]\[5\].
+
+   
+
+6. **Recommendation for ID Documents**  
+     
+   - Start with **EasyOCR** or **PaddleOCR** if dealing with varied lighting and angles.  
+   - Consider **Tesseract** if the input images are standardized (e.g., strictly scanned at 300 DPI in grayscale).  
+   - Investigate **KerasOCR** for more flexible Python/TensorFlow pipelines where detection \+ recognition are integrated in a single architecture.
+
+---
+
+## **References**
+
+- \[1\] [YouTube: OCR Model Comparison (Tesseract, EasyOCR, Keras-OCR, Paddle OCR, MMOCR, OCR-SAM)](https://www.youtube.com/watch?v=svSwmklFb6Q)  
+- \[2\] [Plugger.ai Blog: Comparison of Paddle OCR, EasyOCR, KerasOCR, and Tesseract OCR](https://www.plugger.ai/blog/comparison-of-paddle-ocr-easyocr-kerasocr-and-tesseract-ocr)  
+- \[4\] [Reddit: TesseractOCR vs PaddleOCR vs EasyOCR for Japanese text extraction](https://www.reddit.com/r/MachineLearning/comments/170j47f/d_tesseractocr_vs_paddleocr_vs_easyocr_for/)  
+- \[5\] [StackOverflow: How does PaddleOCR performance compare to Tesseract?](https://stackoverflow.com/questions/68005555/how-does-paddleocr-performance-compare-to-tesseract)  
+- \[6\] [Kaggle Notebook: Keras-OCR vs EasyOCR vs PyTesseract](https://www.kaggle.com/code/odins0n/keras-ocr-vs-easyocr-vs-pytesseract)  
+- \[7\] [Cisdem Resource: Thorough Comparison of 6 Free and Open Source OCR Tools 2024](https://www.cisdem.com/resource/open-source-ocr.html)  
+- \[8\] [LinkedIn: OCR COMPARISONS \- TESSERACT, EAST, AND KERAS OCR](https://www.linkedin.com/pulse/ocr-comparisions-tesseract-east-keras-serkan-erdonmez)
+
+# 
+
+# Data Annotation
+
+\- Use SAM2 with Label Studio to automate annotations: [Video Tutorial](https://youtu.be/FTg8P8z4RgY?si=RT9YK2bwie9rncBC)  
+\- Use [Roboflow Annotations](https://roboflow.com/annotate?ref=blog.roboflow.com) which also have AI Assisted Annotations. Also has [Auto Labels](https://roboflow.com/auto-label?ref=blog.roboflow.com) for images.
+
+# Document Classification
+
+\- **Rule-Based System:** The current plan is to manually inspect the images and then try to identify if there are features in the data we can use to manually classify it, as that will help us determine if using rules is a possible alternative.  
+\-  If rule-based system fails, explore lightweight and efficient models (e.g. MobileNetV3) listed above. 
+
+# 
+
+# Face/Photo Extraction:
+
+# 
+
+# Image Preprocessing:
+
+# 
+
+# 
+
+# 
+
+# Data Augmentation:
