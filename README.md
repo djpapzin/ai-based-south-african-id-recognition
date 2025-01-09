@@ -1,121 +1,114 @@
-# OCR ID Number Extractor
+# ID Document Annotation Project
 
-This project evaluates different OCR (Optical Character Recognition) engines for extracting ID numbers from South African ID documents. The script processes images of ID documents and compares the performance of multiple OCR engines in terms of accuracy, speed, and reliability.
+This project uses the Segment Anything Model (SAM) to assist in annotating ID documents. It provides two approaches:
+1. A standalone Python script for automatic annotation
+2. Integration with Label Studio for interactive annotation
 
-## Features
+## Setup
 
-- Supports multiple OCR engines:
-  - Tesseract OCR (fastest, requires local installation)
-  - EasyOCR (good at partial matches)
-  - PaddleOCR (highest accuracy for complete matches)
-- Parallel image processing for improved performance
-- Comprehensive evaluation metrics
-- Detailed reporting in both JSON and Markdown formats
-- Robust error handling and logging
-- Image preprocessing optimized for ID documents
+### Prerequisites
+- Python 3.8 or higher
+- pip (Python package manager)
+- Virtual environment (recommended)
+
+### Installation
+
+1. Create and activate a virtual environment:
+```bash
+python -m venv venv
+.\venv\Scripts\activate  # Windows
+source venv/bin/activate  # Linux/Mac
+```
+
+2. Install required packages:
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+pip install segment-anything opencv-python numpy requests
+```
+
+3. Download SAM model weights:
+```bash
+python download_sam.py
+```
 
 ## Project Structure
 
 ```
 .
-├── IDcopies/              # Place ID images here in folders named with the ID number
-│   └── .gitkeep          # Keeps the empty directory in git
-├── results/              # Generated results and reports
-│   ├── ocr_results.json  # Detailed JSON results
-│   └── ocr_evaluation_report.md  # Summary report in markdown
-├── ocr_evaluator.py     # Main OCR evaluation script
-└── requirements.txt     # Python dependencies
+├── IDcopies/               # Directory containing ID document images
+├── results/                # Output directory for annotations
+├── sam_backend/           # Label Studio ML backend
+│   ├── model.py          # SAM integration code
+│   ├── requirements.txt  # Backend dependencies
+│   └── Dockerfile       # Docker configuration for backend
+├── id_annotator.py       # Standalone annotation script
+├── download_sam.py       # Script to download SAM weights
+└── README.md            # This file
 ```
-
-## Directory Structure for ID Images
-
-Place your ID images in the `IDcopies` directory using this structure:
-```
-IDcopies/
-    ├── 9001015800085/  # Folder named with the ground truth ID number
-    │   ├── image1.jpg
-    │   └── image2.jpg
-    └── 8505015800085/  # Another folder with different ID number
-        ├── image3.jpg
-        └── image4.jpg
-```
-
-## Installation
-
-1. Install Python dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-2. Install Tesseract OCR:
-   - Windows: Download from [GitHub Releases](https://github.com/UB-Mannheim/tesseract/wiki)
-   - Linux: `sudo apt-get install tesseract-ocr`
-   - macOS: `brew install tesseract`
 
 ## Usage
 
-1. Place your ID images in the `IDcopies` directory following the structure above
-2. Run the script:
+### Standalone Script
+To process images using the standalone script:
 ```bash
-python ocr_evaluator.py
+python id_annotator.py
+```
+This will:
+1. Process all JPEG images in the IDcopies directory
+2. Generate annotations for each image
+3. Save results in `results/annotations.json`
+
+### Label Studio Integration
+
+1. Start Label Studio:
+```bash
+label-studio start
 ```
 
-The script will:
-- Process images from the first 10 ID folders
-- Generate a detailed evaluation report
-- Save results in the `results` directory
+2. Create a new project in Label Studio:
+   - Choose "Object Detection with Bounding Boxes" template
+   - Configure labels:
+     - id_document
+     - name
+     - surname
+     - date_of_birth
+     - identity_number
+     - face
+     - stamp
+     - signature
 
-## OCR Process
+3. Build and run the SAM backend:
+```bash
+cd sam_backend
+docker build -t sam-backend .
+docker run -p 9090:8080 sam-backend
+```
 
-For each image:
-1. Preprocessing:
-   - Resize to standard height while maintaining aspect ratio
-   - Extract region of interest (middle third of image)
-   - Convert to grayscale
-   - Apply adaptive thresholding
-   - Denoise to remove speckles
+4. Connect the ML backend in Label Studio:
+   - Go to Settings > Machine Learning
+   - Add Model
+   - URL: http://localhost:9090
+   - Click "Validate and Save"
 
-2. OCR Processing:
-   - Each engine processes the preprocessed image
-   - Results are collected and timed
-   - ID numbers are extracted using regex pattern
+## Output Format
 
-3. ID Number Extraction:
-   - Regex pattern matches South African ID format:
-     ```python
-     r'\b\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{4}\d{1}\b'
-     ```
-   - Pattern validates:
-     - First 6 digits: YYMMDD (date of birth)
-     - Next 4 digits: SSSS (sequence number)
-     - Last digit: C (citizenship status)
-
-## Performance Metrics
-
-The evaluation report includes:
-- Accuracy (exact matches with ground truth)
-- Partial matches (when ID number is partially detected)
-- No matches (failed detections)
-- Average processing time per image
-
-## Current Results
-
-Based on recent evaluations:
-- PaddleOCR: Best accuracy for complete matches (10%)
-- EasyOCR: Higher rate of partial matches (20%)
-- Tesseract: Fastest processing time but lower accuracy
+The annotations are saved in JSON format with the following structure:
+```json
+{
+  "id_number": {
+    "image_name": [
+      {
+        "bbox": [x, y, width, height],
+        "score": confidence_score,
+        "point": [x, y]
+      }
+    ]
+  }
+}
+```
 
 ## Notes
-
-- The script processes images in parallel using ThreadPoolExecutor
-- Results are saved in both detailed (JSON) and summary (Markdown) formats
-- Error handling and logging are implemented throughout
-- The script is configurable through various parameters in the code
-
-## Future Improvements
-
-- Fine-tune preprocessing parameters for better accuracy
-- Implement additional OCR engines as they become available
-- Add support for different ID document formats
-- Improve ID number extraction logic
-- Add configuration file for easy parameter tuning
+- PDF files are currently skipped in the standalone script
+- The SAM model runs on CPU by default for compatibility
+- Adjust the points of interest in `id_annotator.py` to focus on specific regions
+- Make sure to have sufficient disk space for the SAM model weights (~2.4GB)
