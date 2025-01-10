@@ -1,3 +1,7 @@
+# Ignore model files but keep directory structure
+models/*
+!models/.gitkeep
+
 # Virtual Environment
 .venv/
 venv/
