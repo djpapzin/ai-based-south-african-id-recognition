@@ -1,114 +1,103 @@
-# ID Document Annotation Project
+# South African ID Card OCR Evaluator
 
-This project uses the Segment Anything Model (SAM) to assist in annotating ID documents. It provides two approaches:
-1. A standalone Python script for automatic annotation
-2. Integration with Label Studio for interactive annotation
+A Python tool for evaluating different OCR engines' performance on South African ID cards. The tool processes both image and PDF files, handles rotated documents, and generates detailed performance reports.
 
-## Setup
+## Features
 
-### Prerequisites
-- Python 3.8 or higher
-- pip (Python package manager)
-- Virtual environment (recommended)
+- Supports multiple OCR engines:
+  - Tesseract OCR
+  - EasyOCR
+  - PaddleOCR
+- Handles both images (.jpg, .jpeg, .png) and PDFs
+- Automatic rotation correction for portrait-oriented images
+- Region of Interest (ROI) extraction
+- Parallel processing for improved performance
+- Comprehensive preprocessing pipeline
+- Detailed evaluation reports in both JSON and Markdown formats
 
-### Installation
+## Prerequisites
 
-1. Create and activate a virtual environment:
+### Required Software
+1. Python 3.7+
+2. Tesseract OCR
+3. Poppler (for PDF processing)
+
+### Setup
+
+1. Install Python dependencies:
 ```bash
-python -m venv venv
-.\venv\Scripts\activate  # Windows
-source venv/bin/activate  # Linux/Mac
+pip install -r requirements.txt
 ```
 
-2. Install required packages:
+2. Download OCR models:
 ```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-pip install segment-anything opencv-python numpy requests
+python download_ocr_models.py
 ```
 
-3. Download SAM model weights:
-```bash
-python download_sam.py
-```
+This will download the required models for EasyOCR and PaddleOCR into the `ocr_models` directory.
 
-## Project Structure
+## Directory Structure
 
+Your ID documents should be organized in folders named with the ID number:
 ```
-.
-├── IDcopies/               # Directory containing ID document images
-├── results/                # Output directory for annotations
-├── sam_backend/           # Label Studio ML backend
-│   ├── model.py          # SAM integration code
-│   ├── requirements.txt  # Backend dependencies
-│   └── Dockerfile       # Docker configuration for backend
-├── id_annotator.py       # Standalone annotation script
-├── download_sam.py       # Script to download SAM weights
-└── README.md            # This file
+IDcopies/
+├── 0001011726088/
+│   ├── 0001011726088_F.jpg  # Front of ID
+│   ├── 0001011726088_B.jpg  # Back of ID
+│   └── 0001011726088_A.pdf  # Scanned PDF (optional)
+├── 9001016001086/
+│   ├── 9001016001086_F.jpg
+│   └── 9001016001086_B.jpg
+...
 ```
 
 ## Usage
 
-### Standalone Script
-To process images using the standalone script:
+### Basic Usage
 ```bash
-python id_annotator.py
+python ocr_evaluator.py "path/to/IDcopies" --results-dir results
 ```
-This will:
-1. Process all JPEG images in the IDcopies directory
-2. Generate annotations for each image
-3. Save results in `results/annotations.json`
 
-### Label Studio Integration
-
-1. Start Label Studio:
+### Test Mode (Process only 10 folders)
 ```bash
-label-studio start
+python ocr_evaluator.py "path/to/IDcopies" --results-dir results --test-mode
 ```
 
-2. Create a new project in Label Studio:
-   - Choose "Object Detection with Bounding Boxes" template
-   - Configure labels:
-     - id_document
-     - name
-     - surname
-     - date_of_birth
-     - identity_number
-     - face
-     - stamp
-     - signature
+## Output
 
-3. Build and run the SAM backend:
-```bash
-cd sam_backend
-docker build -t sam-backend .
-docker run -p 9090:8080 sam-backend
-```
+The script generates:
 
-4. Connect the ML backend in Label Studio:
-   - Go to Settings > Machine Learning
-   - Add Model
-   - URL: http://localhost:9090
-   - Click "Validate and Save"
+1. Preprocessed Images:
+   - `results/preprocessed_images/{id_number}/{image_name}_preprocessed.png` - Full image with ROI marked
+   - `results/preprocessed_images/{id_number}/{image_name}_roi.png` - Extracted ROI
 
-## Output Format
+2. Reports:
+   - `results/ocr_results.json` - Detailed JSON results
+   - `results/ocr_evaluation_report.md` - Summary report
 
-The annotations are saved in JSON format with the following structure:
-```json
-{
-  "id_number": {
-    "image_name": [
-      {
-        "bbox": [x, y, width, height],
-        "score": confidence_score,
-        "point": [x, y]
-      }
-    ]
-  }
-}
-```
+## Troubleshooting
 
-## Notes
-- PDF files are currently skipped in the standalone script
-- The SAM model runs on CPU by default for compatibility
-- Adjust the points of interest in `id_annotator.py` to focus on specific regions
-- Make sure to have sufficient disk space for the SAM model weights (~2.4GB)
+### Common Issues
+
+1. "Unable to get page count. Is poppler installed and in PATH?"
+   - Solution: Install poppler and add it to your PATH
+   - Windows users: Restart your terminal after adding to PATH
+
+2. "Tesseract not available"
+   - Solution: Install Tesseract OCR and verify the path in the script
+
+3. Slow Processing
+   - Use `--test-mode` for initial testing
+   - Reduce `max_workers` if memory usage is high
+   - Consider using GPU versions of OCR engines for better performance
+
+## Current Limitations
+
+- CPU-only implementation (GPU support available through OCR engines)
+- Requires specific directory structure
+- PDF processing requires Poppler installation
+- Processing speed depends on hardware capabilities
+
+## License
+
+[Your License Here]

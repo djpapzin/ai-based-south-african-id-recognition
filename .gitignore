@@ -1,6 +1,6 @@
 # Ignore model files but keep directory structure
-models/*
-!models/.gitkeep
+ocr_models/*
+!ocr_models/.gitkeep
 
 # Virtual Environment
 .venv/
