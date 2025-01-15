@@ -50,3 +50,4 @@ idcopiesOld/*
 idcopiesOld/.gitkeep
 annotated_images/*
 annotated_images/.gitkeep
+detectron2_model/model_final.pth
