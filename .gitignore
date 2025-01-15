@@ -40,8 +40,6 @@ wheels/
 results/
 *.log
 *.json
-*.md
-!README.md
 
 # ID Images directory - track directory but not contents
 IDcopies/*
