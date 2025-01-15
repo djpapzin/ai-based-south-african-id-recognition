@@ -6,7 +6,7 @@
 - [x] Validate all aspects of the JSON structure, the paths, the annotations, the labels and image sizes.
 - [x] Verify that all the JSON data is in line with your expectations.
 - [x] Create Python script for splitting the annotated dataset.
-- [x] Split dataset into training and validation sets (90-10 ratio).
+- [x] Split dataset into training and validation sets (80-20 ratio).
 - [x] Verify the image paths are correct in all generated datasets.
 - [x] Save train and validation sets into JSON format.
 - [x] Convert the data to the correct format for detectron2.
@@ -41,7 +41,7 @@
 
 ## Remaining Tasks
 
-- [ ] Train the model on the full dataset.
+- [✓] Train the model on the full dataset (In Progress).
 - [ ] Fine-tune hyperparameters if needed.
 - [ ] Run comprehensive evaluation on test set.
 - [ ] Generate final performance report.
