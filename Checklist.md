@@ -1,60 +1,40 @@
-# Checklist for Detectron2 Model Training
+# Checklist for End-to-End Processing with Segmentation and OCR
 
-## Data Preparation
+## 1. Inference Setup
 
-- [x] Perform a data inspection of the generated JSON COCO file.
-- [x] Validate all aspects of the JSON structure, the paths, the annotations, the labels and image sizes.
-- [x] Verify that all the JSON data is in line with your expectations.
-- [x] Create Python script for splitting the annotated dataset.
-- [x] Split dataset into training and validation sets (80-20 ratio).
-- [x] Verify the image paths are correct in all generated datasets.
-- [x] Save train and validation sets into JSON format.
-- [x] Convert the data to the correct format for detectron2.
-- [x] Use logging to ensure each of the steps in the data conversion process works as expected.
+- [ ] Create function to load the trained Detectron2 model, onto the CPU.
+- [ ] Verify the model is in inference mode (eval mode).
+- [ ] Implement error handling in case the model fails to load, or if there are invalid weights.
+- [ ] Write a function to load test images, and the output from the object detection model.
+- [ ] Verify that the JSON data is being parsed correctly.
 
-## Detectron2 Training Script
+## 2. Segmentation and OCR Processing
 
-- [x] Set up basic Detectron2 configuration:
-   - [x] Select a suitable Model architecture (Faster R-CNN from model zoo).
-   - [x] Set Pre-trained weights.
-   - [x] Set the Number of training steps/epochs.
-   - [x] Set the Learning rate and AdamW optimizer.
-   - [x] Set the Batch sizes and gradient accumulation steps.
-   - [x] Set Image resizing parameters.
-   - [x] Configure Data augmentation strategies.
-- [x] Implement data loaders to read training/validation data correctly.
-- [x] Verify that the data loaders are loading the data as intended.
-- [x] Write the main training loop with metrics tracking.
-- [x] Implement loss components tracking.
-- [x] Implement gradient clipping for training stability.
-- [x] Implement model checkpointing.
-- [x] Provide comprehensive logging system.
+- [ ] Implement a loop to iterate over each image, and each of the detected bounding boxes.
+- [ ] Crop each region based on the bounding box information.
+- [x] Using Tesseract v5 for optimal performance
+- [ ] Implement error handling in case OCR fails.
+- [ ] Implement a method for cleaning the output of OCR.
+- [ ] Ensure the code for OCR can be run on a Windows environment, using the CPU.
 
-## Evaluation and Testing
+## 3. Result Reporting
 
-- [x] Create evaluation hook for validation during training.
-- [x] Implement metrics tracking (mAP, precision, recall, F1).
-- [x] Create visualization utilities for predictions.
-- [x] Create inference script for model testing.
-- [x] Implement results export in COCO format.
-- [x] Add detailed logging of evaluation metrics.
+- [ ] Generate a JSON output file for each image.
+- [ ] Verify that these files contain all the required data (image filename, bounding box info, labels, text output from the OCR).
+- [ ] Create an additional summary report, that gives an overview of how the system performed on the test dataset.
+- [ ] Ensure this report is in JSON format, and include all the bounding boxes, the labels, and the text that was extracted from the OCR model.
 
-## Remaining Tasks
+## 4. Local Verification
+  - [ ] Verify the outputs in a visual way, to check for all the different components of the project.
+  - [ ] Verify that all the bounding boxes are correct.
+  - [ ] Verify the labels, and text from the OCR.
 
-- [✓] Train the model on the full dataset (In Progress).
-- [ ] Fine-tune hyperparameters if needed.
-- [ ] Run comprehensive evaluation on test set.
-- [ ] Generate final performance report.
-- [ ] Document model architecture and training process.
-- [ ] Create user guide for inference script.
-- [ ] Package code and requirements.
+## 5. Performance Improvements
+  - [x] Remove easyOCR due to slow processing speed
+  - [x] Optimize OCR pipeline for faster processing
+  - [ ] Implement batch processing for multiple images
+  - [ ] Add progress tracking for long-running processes
 
-## Next Steps Based on Results
-
-- [ ] Evaluate model performance on real-world data.
-- [ ] Identify areas for improvement:
-  - [ ] Data augmentation strategies
-  - [ ] Model architecture modifications
-  - [ ] Hyperparameter optimization
-- [ ] Create action plan for addressing any issues.
-- [ ] Document all findings and recommendations.
+## 6. Next Steps
+  - [ ] Summarize the results and determine the next steps to improve the project.
+  - [ ] Note down any limitations, and challenges that you faced.

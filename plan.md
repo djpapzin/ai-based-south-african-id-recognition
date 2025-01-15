@@ -1,64 +1,58 @@
-# Plan for Detectron2 Model Training
+# Plan for End-to-End Processing with Segmentation and OCR
 
-## 1. Data Preparation ✓ (Completed)
+## Project Updates
 
-### 1.1. Data Inspection and Validation ✓
-   - Verify the correctness of the exported COCO data by inspecting the JSON structure, image paths, bounding box data, labels, and consistency.
-   - Address any issues identified by making changes to the annotation and data preparation process.
+### OCR Engine Selection
+- **Removed easyOCR**: After evaluation, easyOCR was removed from the project due to:
+  1. Significantly slower processing speed compared to alternatives
+  2. Higher resource consumption
+  3. Not necessary for our specific use case as Tesseract provides better performance for ID card text extraction
 
-### 1.2. Data Splitting ✓
-   - Create a script to split the annotated dataset into training and validation sets.
-   - Implemented 80-20 split ratio for training-validation.
-   - Created and validated COCO format JSON files for each split.
+### Current OCR Implementation
+- Using Tesseract OCR for text extraction due to:
+  1. Faster processing speed
+  2. Better integration with Windows environment
+  3. Sufficient accuracy for ID card text fields
+  4. Lighter resource footprint
 
-### 1.3. Data Format Conversion ✓
-    - Ensured data is in correct format for Detectron2.
-    - Validated COCO files structure and content.
-    - Implemented logging for conversion process.
+## 1. Inference Setup
 
-## 2. Detectron2 Training Script ✓ (Completed)
+### 1.1. Load Trained Model
+    - Create a function to load the Detectron2 model weights from the local path.
+    - Ensure the model is set to inference mode (eval mode).
+    - The script must load the model onto the CPU as a GPU is not available.
 
-### 2.1. Setup Configuration ✓
-   - Configured Detectron2 model with:
-       - Faster R-CNN with FPN backbone
-       - Pre-trained weights from model zoo
-       - Learning rate: 0.00025
-       - Batch size: 2
-       - Max iterations: 5000
-       - 7 object classes
-   - Configuration implemented in train_colab.py
+### 1.2. Load Test Images and Predictions
+    - Write code to load the test images and their corresponding object detection bounding boxes generated from the previous script.
+    -  Include methods to parse the JSON output and obtain the necessary information.
+    -  The JSON output includes the image file name, the bounding box coordinates, and also the class label of the detected objects.
 
-### 2.2. Implement Data Loading ✓
-   - Implemented COCO format data loading
-   - Verified correct loading of images and annotations
+## 2. Segmentation and OCR Processing
 
-### 2.3. Training Loop ✓
-    - Implemented training loop with:
-        - Progress monitoring
-        - Metrics logging
-        - Model checkpointing
-    - Added real-time training status monitoring
+### 2.1. Segmentation of Image
+   - Loop over each image and its bounding boxes
+   - Based on the bounding box information, crop each region.
 
-### 2.4. Evaluation Loop ✓
-    - Implemented COCOEvaluator for validation
-    - Added metrics tracking and logging
-    - Set up periodic evaluation during training
+### 2.2. OCR on Segmented Regions
+    -  Implement OCR on the cropped image regions using either `Tesseract v5` or `PaddleOCR` libraries.
+    - Ensure that your method for calling `Tesseract` or `PaddleOCR` can be used in a Windows environment, using the CPU.
+    -  Implement a way to handle errors in the OCR.
+    -  Also implement a way to clean up the output after the OCR step.
 
-## 3. Model Training (In Progress)
-    - Currently training on Google Colab with T4 GPU
-    - Monitoring metrics:
-        - Total loss
-        - Classification accuracy
-        - Bbox regression metrics
-        - Learning rate
-    - Saving checkpoints for best performing models
-    - Tracking validation performance
+## 3. Result Reporting
 
-## 4. Next Steps
-   - Monitor training progress and analyze results
-   - Based on initial results, plan improvements:
-      - Fine-tune hyperparameters if needed
-      - Adjust data augmentation strategies
-      - Consider model architecture modifications
-   - Prepare comprehensive evaluation report
-   - Document model performance and usage guidelines
+### 3.1. Save OCR Results
+    - Create an output file for each image, to store the output of the OCR step, in JSON format.
+    - The JSON output must include the filename, the bounding box, and the text that was detected by the OCR.
+
+### 3.2. Create a Summary Report
+    - Create an additional summary report, that gives an overview of how the system performed on the test dataset.
+    -  This report should also be in JSON format, and will consist of the filenames, bounding box locations, the labels and the text extracted from the OCR models.
+
+## 4. Local Verification
+   * Load the JSON file to view the output
+   * Verify the text that is being extracted for each region.
+   * Visually verify that the bounding boxes are correctly assigned to each object.
+
+## 5. Next Steps
+    - Based on your testing, determine the next steps, and highlight all the challenges, or limitations that were encountered in this process.
