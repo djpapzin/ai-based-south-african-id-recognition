@@ -1,7 +1,0 @@
-torch
-torchvision
-torchaudio
-label-studio-ml-backend
-segment-anything
-opencv-python
-numpy
