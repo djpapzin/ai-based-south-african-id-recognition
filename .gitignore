@@ -48,3 +48,5 @@ IDcopies/*
 sam_vit_h_4b8939.pth
 idcopiesOld/*
 idcopiesOld/.gitkeep
+annotated_images/*
+annotated_images/.gitkeep
