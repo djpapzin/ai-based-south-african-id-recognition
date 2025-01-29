@@ -7,7 +7,7 @@ ocr_models/*
 venv/
 ENV/
 
-# Python
+# Python-related files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -36,18 +36,36 @@ wheels/
 *.swo
 *~
 
-# Project specific
+# Project specific files
 results/
 *.log
 *.json
+*.cfg
+sam_vit_h_4b8939.pth
 
 # ID Images directory - track directory but not contents
 IDcopies/*
 !IDcopies/.gitkeep
-*.cfg
-sam_vit_h_4b8939.pth
 idcopiesOld/*
 idcopiesOld/.gitkeep
 annotated_images/*
 annotated_images/.gitkeep
+
+# Dataset files
 detectron2_model/model_final.pth
+dataset1.zip
+dataset2.zip
+merged_dataset_final.zip
+colab_dataset.zip
+
+# Data directories
+abenathi_data/
+cleaned_data/
+colab_dataset/
+merged_dataset/
+merged_output/
+
+# Environment and temporary files
+.env
+labelstudio-temp/
+labelstudio_data/
