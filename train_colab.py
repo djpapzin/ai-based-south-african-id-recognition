@@ -13,6 +13,7 @@ from detectron2.data.datasets import register_coco_instances
 from detectron2.evaluation import COCOEvaluator
 from detectron2.utils.visualizer import Visualizer
 from detectron2.data import MetadataCatalog, DatasetCatalog
+from detectron2.engine import DefaultPredictor
 
 class CocoTrainer(DefaultTrainer):
     @classmethod
@@ -37,6 +38,9 @@ def setup_cfg(train_json, val_json, num_classes, output_dir):
     cfg.MODEL.ROI_HEADS.NUM_CLASSES = num_classes
     cfg.OUTPUT_DIR = output_dir
     
+    # Force CPU
+    cfg.MODEL.DEVICE = "cpu"
+
     return cfg
 
 def train_model(train_json, val_json, train_images_dir, val_images_dir, output_dir, num_classes):
@@ -81,6 +85,73 @@ Training completed! Output files are saved in: {output_dir}
 - Other logs and evaluation results are in the same directory
 """)
 
+def setup_predictor():
+    cfg = get_cfg()
+    cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = 2  # Only 2 classes: New and Old
+
+    model_path = f"{GDRIVE_PATH}/trained_model/training_output/model_final.pth"
+
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model file not found at: {model_path}")
+
+    cfg.MODEL.WEIGHTS = model_path
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7
+    # Force CPU
+    cfg.MODEL.DEVICE = "cpu"
+
+    return DefaultPredictor(cfg)
+
+def process_ocr_on_detected_regions(base_dir="detected_regions", output_file="ocr_results.json"):
+    """Process OCR on all detected regions and save results.
+    
+    Args:
+        base_dir: Directory containing detected regions
+        output_file: JSON file to save OCR results
+    """
+    results = {}
+    
+    # Walk through all subdirectories in the detected regions folder
+    for root, dirs, files in os.walk(base_dir):
+        for file in files:
+            if file.lower().endswith(('.jpg', '.jpeg', '.png')):
+                image_path = os.path.join(root, file)
+                
+                # Get parent folder name (original image name)
+                parent_folder = os.path.basename(os.path.dirname(image_path))
+                
+                # Perform OCR with preprocessing
+                text = perform_ocr(image_path)
+                
+                # Store results
+                if parent_folder not in results:
+                    results[parent_folder] = []
+                    
+                results[parent_folder].append({
+                    'region_file': file,
+                    'text': text,
+                    'full_path': image_path
+                })
+    
+    # Save results to JSON file
+    with open(output_file, 'w', encoding='utf-8') as f:
+        json.dump(results, f, indent=2, ensure_ascii=False)
+    
+    print(f"OCR results saved to {output_file}")
+    return results
+
+# Function to display OCR results
+def display_ocr_results(results):
+    """Display OCR results in a readable format."""
+    for image_name, regions in results.items():
+        print(f"\nResults for image: {image_name}")
+        print("-" * 50)
+        for region in regions:
+            print(f"\nRegion: {region['region_file']}")
+            print("Text:")
+            print(region['text'] if region['text'] else "[No text detected]")
+            print("-" * 30)
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description='Train Detectron2 model on Google Colab')
@@ -107,6 +178,11 @@ def main():
         output_dir=args.output_dir,
         num_classes=args.num_classes
     )
+
+    # Add this after test_all_images() call
+    print("\nProcessing OCR on detected regions...")
+    ocr_results = process_ocr_on_detected_regions()
+    display_ocr_results(ocr_results)
 
 if __name__ == "__main__":
     main() 
