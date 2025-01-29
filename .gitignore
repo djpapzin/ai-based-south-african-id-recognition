@@ -41,7 +41,6 @@ results/
 *.log
 *.json
 *.cfg
-sam_vit_h_4b8939.pth
 
 # ID Images directory - track directory but not contents
 IDcopies/*
@@ -52,7 +51,6 @@ annotated_images/*
 annotated_images/.gitkeep
 
 # Dataset files
-detectron2_model/model_final.pth
 dataset1.zip
 dataset2.zip
 merged_dataset_final.zip
