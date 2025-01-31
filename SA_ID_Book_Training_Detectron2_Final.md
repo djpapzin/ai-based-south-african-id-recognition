@@ -178,7 +178,7 @@ def visualize_prediction(predictor, image_path):
     plt.show()
 ```
 
-## 8. Setup Paths and Verify Dataset
+## 8. Setup Paths and Fix Dataset
 
 ```python
 # Set paths for your existing dataset structure
@@ -191,78 +191,84 @@ OUTPUT_DIR = os.path.join(GDRIVE_PATH, "model_output")
 # Create output directory
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Verify training dataset
+# Fix annotations first
 train_json = os.path.join(TRAIN_PATH, "annotations.json")
-train_images = os.path.join(TRAIN_PATH, "images")
-verify_dataset(train_json, train_images)
-
-# Verify validation dataset
 val_json = os.path.join(VAL_PATH, "annotations.json")
+train_images = os.path.join(TRAIN_PATH, "images")
 val_images = os.path.join(VAL_PATH, "images")
-verify_dataset(val_json, val_images)
-```
 
-## 9. Register Datasets
-
-```python
-# Register datasets
-print("\nRegistering datasets...")
-
-# Force re-import of detectron2 data modules to ensure clean state
-import importlib
-import detectron2.data.datasets
-importlib.reload(detectron2.data.datasets)
-from detectron2.data.datasets import register_coco_instances
-from detectron2.data import DatasetCatalog, MetadataCatalog
+# Fix and get paths to fixed annotation files
+fixed_train_json = fix_dataset_annotations(train_json, train_images)
+fixed_val_json = fix_dataset_annotations(val_json, val_images)
 
 # Clean up existing registrations
-def unregister_dataset(name):
-    try:
-        if name in DatasetCatalog:
-            DatasetCatalog.remove(name)
-        if name in MetadataCatalog:
-            MetadataCatalog.remove(name)
-    except Exception as e:
-        print(f"Warning during unregistering {name}: {e}")
+for d in ["sa_id_train", "sa_id_val"]:
+    if d in DatasetCatalog:
+        DatasetCatalog.remove(d)
+    if d in MetadataCatalog:
+        MetadataCatalog.remove(d)
 
-# Unregister both datasets
-print("Cleaning up existing registrations...")
-unregister_dataset("sa_id_train")
-unregister_dataset("sa_id_val")
-
-# Verify paths before registration
-print("\nVerifying paths:")
-print(f"Train JSON: {os.path.exists(train_json)}")
-print(f"Train Images: {os.path.exists(train_images)}")
-print(f"Val JSON: {os.path.exists(val_json)}")
-print(f"Val Images: {os.path.exists(val_images)}")
-
-# Register datasets with new paths
-print(f"\nRegistering training dataset from: {train_json}")
-register_coco_instances(
-    "sa_id_train",
-    {},
-    train_json,
-    train_images
-)
-
-print(f"\nRegistering validation dataset from: {val_json}")
-register_coco_instances(
-    "sa_id_val",
-    {},
-    val_json,
-    val_images
-)
+# Register datasets with fixed annotations
+register_coco_instances("sa_id_train", {}, fixed_train_json, train_images)
+register_coco_instances("sa_id_val", {}, fixed_val_json, val_images)
 
 # Verify registration
 print("\nVerifying dataset registration:")
-try:
-    train_dicts = DatasetCatalog.get("sa_id_train")
-    val_dicts = DatasetCatalog.get("sa_id_val")
-    print(f"✓ Training dataset registered with {len(train_dicts)} images")
-    print(f"✓ Validation dataset registered with {len(val_dicts)} images")
-except Exception as e:
-    print(f"Error during verification: {e}")
+train_dicts = DatasetCatalog.get("sa_id_train")
+val_dicts = DatasetCatalog.get("sa_id_val")
+print(f"✓ Training dataset registered with {len(train_dicts)} images")
+print(f"✓ Validation dataset registered with {len(val_dicts)} images")
+
+# Print sample annotation to verify structure
+if len(train_dicts) > 0:
+    sample_dict = train_dicts[0]
+    print("\nSample annotation structure:")
+    if 'annotations' in sample_dict:
+        print(f"Number of annotations: {len(sample_dict['annotations'])}")
+        if len(sample_dict['annotations']) > 0:
+            print("First annotation fields:", sample_dict['annotations'][0].keys())
+```
+
+## 9. Dataset Verification Function
+
+```python
+def verify_dataset_structure(dataset_dicts):
+    """Verify the structure of dataset annotations."""
+    print("\nVerifying dataset structure...")
+    
+    for idx, d in enumerate(dataset_dicts):
+        # Check basic required fields
+        required_fields = ['file_name', 'height', 'width', 'image_id']
+        for field in required_fields:
+            if field not in d:
+                print(f"❌ Missing required field '{field}' in image {idx}")
+                continue
+        
+        # Check annotations
+        if 'annotations' not in d:
+            print(f"❌ No annotations found for image {idx}")
+            continue
+            
+        for ann_idx, ann in enumerate(d['annotations']):
+            # Check annotation required fields
+            ann_required_fields = ['bbox', 'bbox_mode', 'category_id']
+            for field in ann_required_fields:
+                if field not in ann:
+                    print(f"❌ Missing required field '{field}' in annotation {ann_idx} of image {idx}")
+                    continue
+            
+            # Verify bbox format
+            if len(ann['bbox']) != 4:
+                print(f"❌ Invalid bbox format in annotation {ann_idx} of image {idx}")
+                continue
+    
+    print("✓ Dataset structure verification complete")
+
+# Verify both datasets
+print("\nVerifying training dataset:")
+verify_dataset_structure(train_dicts)
+print("\nVerifying validation dataset:")
+verify_dataset_structure(val_dicts)
 ```
 
 ## 9.5 Fix Dataset Annotations
