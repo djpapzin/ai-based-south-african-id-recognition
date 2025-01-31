@@ -2,6 +2,7 @@ import json
 import os
 from collections import defaultdict
 from pprint import pprint
+import sys
 
 def analyze_label_studio_export(json_path):
     """Analyze Label Studio JSON export and show keypoint structure."""
@@ -45,156 +46,129 @@ def analyze_label_studio_export(json_path):
         for kp_type, count in sorted(keypoint_types.items()):
             print(f"- {kp_type}: {count} annotations")
 
-def convert_to_detectron2_coco(label_studio_path, output_path):
-    """Convert Label Studio JSON to Detectron2-compatible COCO format with keypoint support."""
-    print(f"\nConverting {label_studio_path} to Detectron2 COCO format...")
+def convert_to_detectron2_coco(input_path, output_path=None):
+    print(f"\nVerifying file: {input_path}")
     
-    with open(label_studio_path, 'r') as f:
+    # Load Label Studio JSON
+    with open(input_path) as f:
         data = json.load(f)
     
-    # Initialize COCO format structure
-    coco_format = {
+    # Print first item structure for debugging
+    print("\nFirst item structure:")
+    print(json.dumps(data[0] if isinstance(data, list) else data, indent=2))
+    
+    # Verify expected fields
+    fields = list(data.keys()) if not isinstance(data, list) else list(data[0].keys())
+    print("\nFound fields:", fields)
+    expected_fields = ["annotations", "data", "id"]
+    print("Expected fields:", expected_fields)
+    
+    # Print sample annotation structure
+    if not isinstance(data, list) and "annotations" in data:
+        print("\nSample annotation structure:")
+        print(json.dumps(data["annotations"][0], indent=1))
+    
+    # If output path not specified, create one in same directory as input
+    if output_path is None:
+        input_dir = os.path.dirname(input_path)
+        output_path = os.path.join(input_dir, "detectron2_coco.json")
+    
+    print(f"\nConverting {input_path} to Detectron2 COCO format...")
+    
+    # Initialize COCO format
+    coco_data = {
         "images": [],
         "annotations": [],
-        "categories": []
+        "categories": [
+            {"id": 0, "name": "citizenship_status"},
+            {"id": 1, "name": "country_of_birth"},
+            {"id": 2, "name": "date_of_birth"},
+            {"id": 3, "name": "face"},
+            {"id": 4, "name": "id_document"},
+            {"id": 5, "name": "id_number"},
+            {"id": 6, "name": "names"},
+            {"id": 7, "name": "surname"},
+            {"id": 8, "name": "corners"},
+            {"id": 9, "name": "sex"},
+            {"id": 10, "name": "nationality"},
+            {"id": 11, "name": "signature"}
+        ]
     }
     
-    # Define keypoint names in order (this order must be consistent)
-    keypoint_names = ['top_left_corner', 'top_right_corner', 'bottom_left_corner', 'bottom_right_corner']
-    
-    # Create categories
-    bbox_categories = set()
-    for item in data:
-        if 'annotations' in item and item['annotations']:
-            for annotation in item['annotations']:
-                for result in annotation.get('result', []):
-                    if result['type'] == 'rectanglelabels':
-                        bbox_categories.update(result['value']['rectanglelabels'])
-    
-    # Add bounding box categories
-    category_id = 0
-    category_map = {}
-    for category in sorted(bbox_categories):
-        coco_format["categories"].append({
-            "id": category_id,
-            "name": category,
-            "supercategory": "none"
+    # Process each task
+    annotation_id = 0
+    for task in data if isinstance(data, list) else [data]:
+        image_id = task["id"]
+        file_name = task["file_upload"]
+        
+        # Add image
+        coco_data["images"].append({
+            "id": image_id,
+            "file_name": file_name,
+            "width": 400,  # Fixed size for now
+            "height": 888
         })
-        category_map[category] = category_id
-        category_id += 1
-    
-    # Add keypoint category with all corner points
-    coco_format["categories"].append({
-        "id": category_id,
-        "name": "corners",
-        "supercategory": "none",
-        "keypoints": keypoint_names,
-        "skeleton": []  # Define if needed
-    })
-    keypoint_category_id = category_id
-    
-    # Process images and annotations
-    image_id = 0
-    ann_id = 0
-    
-    for item in data:
-        if 'annotations' in item and item['annotations']:
-            # Get image info
-            image_filename = os.path.basename(item['data']['image'])
-            original_height = None
-            original_width = None
-            
-            # Get dimensions from first annotation result
-            if item['annotations'][0]['result']:
-                first_result = item['annotations'][0]['result'][0]
-                original_height = first_result['original_height']
-                original_width = first_result['original_width']
-            
-            # Add image
-            coco_format["images"].append({
-                "id": image_id,
-                "file_name": image_filename,
-                "width": original_width,
-                "height": original_height
-            })
-            
-            # Process annotations
-            for annotation in item['annotations']:
-                # Collect keypoints for this image
-                keypoints = {name: None for name in keypoint_names}
-                
-                for result in annotation.get('result', []):
+        
+        # Process annotations
+        for ann in task["annotations"]:
+            for result in ann["result"]:
+                if result["type"] in ["rectanglelabels", "keypointlabels"]:
+                    value = result["value"]
+                    
                     # Handle bounding boxes
-                    if result['type'] == 'rectanglelabels':
-                        value = result['value']
-                        x = value['x'] * original_width / 100  # Convert from percentage to pixels
-                        y = value['y'] * original_height / 100
-                        width = value['width'] * original_width / 100
-                        height = value['height'] * original_height / 100
+                    if result["type"] == "rectanglelabels":
+                        category_name = value["rectanglelabels"][0]
+                        try:
+                            category_id = next(cat["id"] for cat in coco_data["categories"] if cat["name"] == category_name)
+                        except StopIteration:
+                            print(f"Warning: Skipping annotation with unknown category '{category_name}'")
+                            continue
                         
-                        for label in value['rectanglelabels']:
-                            coco_format["annotations"].append({
-                                "id": ann_id,
-                                "image_id": image_id,
-                                "category_id": category_map[label],
-                                "bbox": [x, y, width, height],
-                                "area": width * height,
-                                "segmentation": [],
-                                "iscrowd": 0
-                            })
-                            ann_id += 1
-                    
-                    # Collect keypoints
-                    elif result['type'] == 'keypointlabels':
-                        value = result['value']
-                        x = value['x'] * original_width / 100
-                        y = value['y'] * original_height / 100
-                        keypoint_label = value['keypointlabels'][0]
-                        keypoints[keypoint_label] = (x, y)
-                
-                # Add keypoint annotation if we found any keypoints
-                if any(kp is not None for kp in keypoints.values()):
-                    # Convert keypoints to COCO format [x1,y1,v1,x2,y2,v2,...]
-                    kp_list = []
-                    for name in keypoint_names:
-                        if keypoints[name] is not None:
-                            kp_list.extend([keypoints[name][0], keypoints[name][1], 2])
-                        else:
-                            kp_list.extend([0, 0, 0])
-                    
-                    # Calculate bounding box that encompasses all keypoints
-                    valid_points = [(x, y) for x, y, v in zip(kp_list[::3], kp_list[1::3], kp_list[2::3]) if v > 0]
-                    if valid_points:
-                        x_coords, y_coords = zip(*valid_points)
-                        x_min, x_max = min(x_coords), max(x_coords)
-                        y_min, y_max = min(y_coords), max(y_coords)
-                        width = x_max - x_min
-                        height = y_max - y_min
+                        # Convert relative coordinates to absolute
+                        x = value["x"] * result["original_width"] / 100
+                        y = value["y"] * result["original_height"] / 100
+                        w = value["width"] * result["original_width"] / 100
+                        h = value["height"] * result["original_height"] / 100
                         
-                        coco_format["annotations"].append({
-                            "id": ann_id,
+                        coco_data["annotations"].append({
+                            "id": annotation_id,
                             "image_id": image_id,
-                            "category_id": keypoint_category_id,
-                            "keypoints": kp_list,
-                            "num_keypoints": sum(1 for v in kp_list[2::3] if v > 0),
-                            "bbox": [x_min, y_min, width, height],
-                            "area": width * height,
+                            "category_id": category_id,
+                            "bbox": [x, y, w, h],
+                            "area": w * h,
                             "iscrowd": 0
                         })
-                        ann_id += 1
-            
-            image_id += 1
+                        annotation_id += 1
+                    
+                    # Handle keypoints
+                    elif result["type"] == "keypointlabels":
+                        category_id = 8  # corners category
+                        keypoint_name = value["keypointlabels"][0]
+                        
+                        # Convert relative coordinates to absolute
+                        x = value["x"] * result["original_width"] / 100
+                        y = value["y"] * result["original_height"] / 100
+                        
+                        coco_data["annotations"].append({
+                            "id": annotation_id,
+                            "image_id": image_id,
+                            "category_id": category_id,
+                            "keypoints": [x, y, 2],  # 2 means visible keypoint
+                            "num_keypoints": 1
+                        })
+                        annotation_id += 1
     
-    # Save converted format
-    with open(output_path, 'w') as f:
-        json.dump(coco_format, f, indent=2)
+    # Save COCO format JSON
+    with open(output_path, "w") as f:
+        json.dump(coco_data, f, indent=2)
     
     print(f"\nConversion complete. Saved to: {output_path}")
-    print(f"Total images: {len(coco_format['images'])}")
-    print(f"Total annotations: {len(coco_format['annotations'])}")
-    print(f"Total categories: {len(coco_format['categories'])}")
+    print(f"Total images: {len(coco_data['images'])}")
+    print(f"Total annotations: {len(coco_data['annotations'])}")
+    print(f"Total categories: {len(coco_data['categories'])}")
+    
     print("\nCategories:")
-    for cat in coco_format['categories']:
+    for cat in coco_data["categories"]:
         print(f"- {cat['name']} (id: {cat['id']})")
 
 def verify_label_studio_format(json_path):
@@ -242,11 +216,15 @@ def verify_label_studio_format(json_path):
     return True
 
 if __name__ == "__main__":
+    # Get input path from command line or use default
+    input_path = sys.argv[1] if len(sys.argv) > 1 else os.path.join("abenathi_object_detection_dataset", "abenathi_object_detection.json")
+    
+    # Get output path from command line or use default
+    output_path = sys.argv[2] if len(sys.argv) > 2 else None
+    
     # Verify Abenathi's export
     json_path = r"C:\Users\lfana\Documents\Kwantu\Machine Learning\abenathi_object_detection_dataset\abenathi_object_detection.json"
     verify_label_studio_format(json_path)
 
     # Convert Abenathi's dataset
-    input_path = r"C:\Users\lfana\Documents\Kwantu\Machine Learning\abenathi_object_detection_dataset\abenathi_object_detection.json"
-    output_path = r"C:\Users\lfana\Documents\Kwantu\Machine Learning\abenathi_object_detection_dataset\detectron2_coco.json"
     convert_to_detectron2_coco(input_path, output_path)
