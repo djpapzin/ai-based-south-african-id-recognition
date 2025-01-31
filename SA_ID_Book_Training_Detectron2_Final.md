@@ -155,123 +155,78 @@ def verify_dataset(json_path, images_dir):
     return True
 ```
 
-## 7. Visualization Function
+## 7. Visualization Functions
 
 ```python
+def visualize_dataset(dataset_name, num_samples=3):
+    """Visualize random samples from the dataset."""
+    dataset_dicts = DatasetCatalog.get(dataset_name)
+    metadata = MetadataCatalog.get(dataset_name)
+    
+    # Get random samples
+    samples = random.sample(dataset_dicts, min(num_samples, len(dataset_dicts)))
+    
+    for d in samples:
+        img = cv2.imread(d["file_name"])
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # Convert to RGB for display
+        visualizer = Visualizer(img, metadata=metadata, scale=0.5)
+        
+        if "annotations" in d:
+            # Draw annotations
+            vis = visualizer.draw_dataset_dict(d)
+        else:
+            vis = visualizer.draw_instance_predictions(d)
+            
+        plt.figure(figsize=(15, 10))
+        plt.imshow(vis.get_image())
+        plt.title(f"Sample from {dataset_name}\nFile: {os.path.basename(d['file_name'])}")
+        plt.axis('off')
+        plt.show()
+        print(f"Image size: {img.shape}")
+        print(f"Number of annotations: {len(d.get('annotations', []))}")
+        print("Annotation types:", [ann.get('category_id', 'unknown') for ann in d.get('annotations', [])])
+        print("-" * 50)
+
 def visualize_prediction(predictor, image_path):
     """Visualize model prediction on an image."""
     im = cv2.imread(image_path)
+    if im is None:
+        print(f"Error: Could not load image from {image_path}")
+        return
+        
     outputs = predictor(im)
     
     # Convert BGR to RGB for visualization
     im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
     
     # Create visualizer
-    v = Visualizer(im[:, :, ::-1],
+    v = Visualizer(im,
                    metadata=MetadataCatalog.get("sa_id_val"),
                    scale=0.8)
     
     out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
     plt.figure(figsize=(15, 10))
-    plt.imshow(out.get_image()[:, :, ::-1])
+    plt.imshow(out.get_image())
+    plt.title(f"Predictions on {os.path.basename(image_path)}")
     plt.axis('off')
     plt.show()
-```
-
-## 8. Setup Paths and Fix Dataset
-
-```python
-# Set paths for your existing dataset structure
-GDRIVE_PATH = "/content/drive/MyDrive/Kwantu/Machine Learning"
-DATASET_PATH = os.path.join(GDRIVE_PATH, "merged_dataset")
-TRAIN_PATH = os.path.join(DATASET_PATH, "train")
-VAL_PATH = os.path.join(DATASET_PATH, "val")
-OUTPUT_DIR = os.path.join(GDRIVE_PATH, "model_output")
-
-# Create output directory
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-# Fix annotations first
-train_json = os.path.join(TRAIN_PATH, "annotations.json")
-val_json = os.path.join(VAL_PATH, "annotations.json")
-train_images = os.path.join(TRAIN_PATH, "images")
-val_images = os.path.join(VAL_PATH, "images")
-
-# Fix and get paths to fixed annotation files
-fixed_train_json = fix_dataset_annotations(train_json, train_images)
-fixed_val_json = fix_dataset_annotations(val_json, val_images)
-
-# Clean up existing registrations
-for d in ["sa_id_train", "sa_id_val"]:
-    if d in DatasetCatalog:
-        DatasetCatalog.remove(d)
-    if d in MetadataCatalog:
-        MetadataCatalog.remove(d)
-
-# Register datasets with fixed annotations
-register_coco_instances("sa_id_train", {}, fixed_train_json, train_images)
-register_coco_instances("sa_id_val", {}, fixed_val_json, val_images)
-
-# Verify registration
-print("\nVerifying dataset registration:")
-train_dicts = DatasetCatalog.get("sa_id_train")
-val_dicts = DatasetCatalog.get("sa_id_val")
-print(f"✓ Training dataset registered with {len(train_dicts)} images")
-print(f"✓ Validation dataset registered with {len(val_dicts)} images")
-
-# Print sample annotation to verify structure
-if len(train_dicts) > 0:
-    sample_dict = train_dicts[0]
-    print("\nSample annotation structure:")
-    if 'annotations' in sample_dict:
-        print(f"Number of annotations: {len(sample_dict['annotations'])}")
-        if len(sample_dict['annotations']) > 0:
-            print("First annotation fields:", sample_dict['annotations'][0].keys())
-```
-
-## 9. Dataset Verification Function
-
-```python
-def verify_dataset_structure(dataset_dicts):
-    """Verify the structure of dataset annotations."""
-    print("\nVerifying dataset structure...")
     
-    for idx, d in enumerate(dataset_dicts):
-        # Check basic required fields
-        required_fields = ['file_name', 'height', 'width', 'image_id']
-        for field in required_fields:
-            if field not in d:
-                print(f"❌ Missing required field '{field}' in image {idx}")
-                continue
-        
-        # Check annotations
-        if 'annotations' not in d:
-            print(f"❌ No annotations found for image {idx}")
-            continue
-            
-        for ann_idx, ann in enumerate(d['annotations']):
-            # Check annotation required fields
-            ann_required_fields = ['bbox', 'bbox_mode', 'category_id']
-            for field in ann_required_fields:
-                if field not in ann:
-                    print(f"❌ Missing required field '{field}' in annotation {ann_idx} of image {idx}")
-                    continue
-            
-            # Verify bbox format
-            if len(ann['bbox']) != 4:
-                print(f"❌ Invalid bbox format in annotation {ann_idx} of image {idx}")
-                continue
-    
-    print("✓ Dataset structure verification complete")
+    # Print prediction details
+    print("\nPrediction Details:")
+    print(f"Number of detections: {len(outputs['instances'])}")
+    if len(outputs['instances']) > 0:
+        print("Confidence scores:", outputs['instances'].scores.tolist())
+        print("Predicted classes:", outputs['instances'].pred_classes.tolist())
 
-# Verify both datasets
-print("\nVerifying training dataset:")
-verify_dataset_structure(train_dicts)
-print("\nVerifying validation dataset:")
-verify_dataset_structure(val_dicts)
+# Test the visualization functions
+print("Visualizing training dataset samples:")
+visualize_dataset("sa_id_train", num_samples=2)
+
+print("\nVisualizing validation dataset samples:")
+visualize_dataset("sa_id_val", num_samples=2)
 ```
 
-## 9.5 Fix Dataset Annotations
+## 8. Dataset Annotation Fix Function
 
 ```python
 import json
@@ -344,19 +299,32 @@ def fix_dataset_annotations(json_path, images_dir):
     print(f"\nFixed {fixed_count} annotations. Saved to {output_path}")
     print(f"Total valid annotations: {len(valid_annotations)}")
     return output_path
+```
 
-# Fix annotations
+## 9. Setup and Register Datasets
+
+```python
+# Set paths for your existing dataset structure
+GDRIVE_PATH = "/content/drive/MyDrive/Kwantu/Machine Learning"
+DATASET_PATH = os.path.join(GDRIVE_PATH, "merged_dataset")
+TRAIN_PATH = os.path.join(DATASET_PATH, "train")
+VAL_PATH = os.path.join(DATASET_PATH, "val")
+OUTPUT_DIR = os.path.join(GDRIVE_PATH, "model_output")
+
+# Create output directory
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# Fix annotations first
 train_json = os.path.join(TRAIN_PATH, "annotations.json")
 val_json = os.path.join(VAL_PATH, "annotations.json")
 train_images = os.path.join(TRAIN_PATH, "images")
 val_images = os.path.join(VAL_PATH, "images")
 
-# Fix and update dataset registration
+# Fix and get paths to fixed annotation files
 fixed_train_json = fix_dataset_annotations(train_json, train_images)
 fixed_val_json = fix_dataset_annotations(val_json, val_images)
 
-# Remove existing registrations
-from detectron2.data.catalog import DatasetCatalog, MetadataCatalog
+# Clean up existing registrations
 for d in ["sa_id_train", "sa_id_val"]:
     if d in DatasetCatalog:
         DatasetCatalog.remove(d)
@@ -369,146 +337,173 @@ register_coco_instances("sa_id_val", {}, fixed_val_json, val_images)
 
 # Verify registration
 print("\nVerifying dataset registration:")
-print(f"Training images: {len(DatasetCatalog.get('sa_id_train'))}")
-print(f"Validation images: {len(DatasetCatalog.get('sa_id_val'))}")
+train_dicts = DatasetCatalog.get("sa_id_train")
+val_dicts = DatasetCatalog.get("sa_id_val")
+print(f"✓ Training dataset registered with {len(train_dicts)} images")
+print(f"✓ Validation dataset registered with {len(val_dicts)} images")
+
+# Print sample annotation to verify structure
+if len(train_dicts) > 0:
+    sample_dict = train_dicts[0]
+    print("\nSample annotation structure:")
+    if 'annotations' in sample_dict:
+        print(f"Number of annotations: {len(sample_dict['annotations'])}")
+        if len(sample_dict['annotations']) > 0:
+            print("First annotation fields:", sample_dict['annotations'][0].keys())
 ```
 
-## 10. Training with TensorBoard
+## 10. Dataset Verification
 
 ```python
-# Load TensorBoard extension for Colab
-%load_ext tensorboard
+def verify_dataset_structure(dataset_dicts):
+    """Verify the structure of dataset annotations."""
+    print("\nVerifying dataset structure...")
+    has_errors = False
+    
+    for idx, d in enumerate(dataset_dicts):
+        # Check basic required fields
+        required_fields = ['file_name', 'height', 'width', 'image_id']
+        missing_fields = [field for field in required_fields if field not in d]
+        if missing_fields:
+            print(f"❌ Image {idx}: Missing fields: {missing_fields}")
+            print(f"   File: {d.get('file_name', 'unknown')}")
+            has_errors = True
+            continue
+        
+        # Check annotations
+        if 'annotations' not in d:
+            print(f"❌ Image {idx}: No annotations found")
+            print(f"   File: {d['file_name']}")
+            has_errors = True
+            continue
+            
+        for ann_idx, ann in enumerate(d['annotations']):
+            # Print full annotation for debugging
+            print(f"\nChecking annotation {ann_idx} in image {idx}")
+            print(f"Annotation contents: {ann}")
+            
+            # Check annotation required fields
+            ann_required_fields = ['bbox', 'bbox_mode', 'category_id']
+            missing_ann_fields = [field for field in ann_required_fields if field not in ann]
+            
+            if missing_ann_fields:
+                print(f"❌ Image {idx}, Annotation {ann_idx}: Missing fields: {missing_ann_fields}")
+                print(f"   File: {d['file_name']}")
+                has_errors = True
+                continue
+            
+            # Verify bbox format if present
+            if 'bbox' in ann:
+                try:
+                    if len(ann['bbox']) != 4:
+                        print(f"❌ Image {idx}, Annotation {ann_idx}: Invalid bbox format")
+                        print(f"   Found bbox: {ann['bbox']}")
+                        print(f"   File: {d['file_name']}")
+                        has_errors = True
+                except Exception as e:
+                    print(f"❌ Image {idx}, Annotation {ann_idx}: Error processing bbox")
+                    print(f"   Error: {str(e)}")
+                    print(f"   Bbox value: {ann.get('bbox', 'Not found')}")
+                    print(f"   File: {d['file_name']}")
+                    has_errors = True
+    
+    if has_errors:
+        print("\n⚠️ Dataset verification found errors that need to be fixed")
+    else:
+        print("✓ Dataset structure verification complete - No errors found")
+    
+    return not has_errors
 
-# Clear any previous TensorBoard logs
-!rm -rf ./logs/
+# Verify both datasets
+print("\nVerifying training dataset:")
+train_ok = verify_dataset_structure(train_dicts)
+print("\nVerifying validation dataset:")
+val_ok = verify_dataset_structure(val_dicts)
 
-# Start TensorBoard
-%tensorboard --logdir={OUTPUT_DIR}/logs
+if not (train_ok and val_ok):
+    print("\n⚠️ Please fix the dataset errors before proceeding with training")
+else:
+    print("\n✓ All dataset checks passed - Ready for training")
+```
 
-# Setup TensorBoard writer
-from torch.utils.tensorboard import SummaryWriter
+## 11. Training with TensorBoard
+
+```python
+# Setup TensorBoard
 import datetime
-import detectron2.data.transforms as T
-from detectron2.data import DatasetMapper, build_detection_train_loader
-from detectron2.data import detection_utils as utils
-from detectron2.engine import hooks
-import copy
-import torch
-import cv2
+%load_ext tensorboard
+from torch.utils.tensorboard import SummaryWriter
 
-# Configure TensorBoard writer with Google Drive path
+# Create a unique log directory
 current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 log_dir = os.path.join(OUTPUT_DIR, 'logs', current_time)
 os.makedirs(log_dir, exist_ok=True)
 writer = SummaryWriter(log_dir=log_dir)
-print(f"\nTensorBoard logs will be saved to: {log_dir}")
 
-class TensorboardTrainer(CocoTrainer):
-    """Custom trainer with TensorBoard logging."""
-    def __init__(self, cfg, writer):
+# Clear any existing TensorBoard instances
+!kill -9 $(lsof -t -i:6006) 2>/dev/null || true
+%tensorboard --logdir={log_dir}
+
+# Configure training
+cfg = get_cfg()
+cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
+cfg.DATASETS.TRAIN = ("sa_id_train",)
+cfg.DATASETS.TEST = ()
+
+# Set device
+cfg.MODEL.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"Using device: {cfg.MODEL.DEVICE}")
+
+# Model parameters
+cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
+cfg.MODEL.ROI_HEADS.NUM_CLASSES = 12  # Update with your number of classes
+cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 128
+cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7
+
+# Training parameters
+cfg.SOLVER.IMS_PER_BATCH = 2
+cfg.SOLVER.BASE_LR = 0.00025
+cfg.SOLVER.MAX_ITER = 5000
+cfg.SOLVER.STEPS = []
+cfg.SOLVER.CHECKPOINT_PERIOD = 1000
+cfg.TEST.EVAL_PERIOD = 500
+
+# Output directory
+cfg.OUTPUT_DIR = OUTPUT_DIR
+os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
+
+print("\nTraining configuration:")
+print(f"Learning rate: {cfg.SOLVER.BASE_LR}")
+print(f"Max iterations: {cfg.SOLVER.MAX_ITER}")
+print(f"Images per batch: {cfg.SOLVER.IMS_PER_BATCH}")
+print(f"ROI batch size per image: {cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE}")
+print(f"Number of classes: {cfg.MODEL.ROI_HEADS.NUM_CLASSES}")
+
+# Create custom trainer to log metrics to TensorBoard
+class TensorboardTrainer(DefaultTrainer):
+    def __init__(self, cfg):
         super().__init__(cfg)
-        self.writer = writer
+        self.writer = SummaryWriter(log_dir=log_dir)
         
     def after_step(self):
-        # Log metrics every few iterations
-        if self.iter % 20 == 0:
-            metrics = self.storage.latest()
-            for k, v in metrics.items():
-                if isinstance(v, (int, float)):
-                    self.writer.add_scalar(k, v, self.iter)
+        # Log metrics after each step
+        metrics = self.storage.latest()
+        for k, v in metrics.items():
+            if isinstance(v, (int, float)):
+                self.writer.add_scalar(k, v, self.iter)
         super().after_step()
 
-class CustomDatasetMapper(DatasetMapper):
-    """
-    Custom mapper that handles image size mismatches and adds augmentations.
-    """
-    def __call__(self, dataset_dict):
-        dataset_dict = copy.deepcopy(dataset_dict)
-        image = utils.read_image(dataset_dict["file_name"], format="BGR")
-        
-        # Get expected dimensions from annotations
-        expected_width = dataset_dict["width"]
-        expected_height = dataset_dict["height"]
-        
-        # Resize image if dimensions don't match
-        if image.shape[0] != expected_height or image.shape[1] != expected_width:
-            print(f"Resizing image {dataset_dict['file_name']} from {image.shape[1]}x{image.shape[0]} to {expected_width}x{expected_height}")
-            image = cv2.resize(image, (expected_width, expected_height))
-        
-        # Apply augmentations from parent class
-        aug_input = T.AugInput(image)
-        transforms = self.augmentations(aug_input)
-        image = aug_input.image
-        
-        dataset_dict["image"] = torch.as_tensor(image.transpose(2, 0, 1).astype("float32"))
-        
-        if "annotations" in dataset_dict:
-            for anno in dataset_dict["annotations"]:
-                if not self.use_instance_mask:
-                    anno.pop("segmentation", None)
-                if not self.use_keypoint:
-                    anno.pop("keypoints", None)
-            
-            annos = [
-                utils.transform_instance_annotations(obj, transforms, image.shape[:2])
-                for obj in dataset_dict.pop("annotations")
-                if obj.get("iscrowd", 0) == 0
-            ]
-            instances = utils.annotations_to_instances(annos, image.shape[:2])
-            dataset_dict["instances"] = utils.filter_empty_instances(instances)
-        
-        return dataset_dict
-
-def build_custom_train_loader(cfg):
-    """Build a custom data loader with our mapper."""
-    mapper = CustomDatasetMapper(cfg, is_train=True, augmentations=[
-        T.RandomFlip(prob=0.5, horizontal=True),
-        T.RandomBrightness(0.8, 1.2),
-        T.RandomContrast(0.8, 1.2),
-    ])
-    return build_detection_train_loader(cfg, mapper=mapper)
-
-# Setup configuration
-print("\nSetting up model configuration...")
-cfg = setup_cfg(
-    train_dataset_name="sa_id_train",
-    val_dataset_name="sa_id_val",
-    num_classes=15,  # 15 classes for SA ID detection
-    output_dir=OUTPUT_DIR,
-    use_gpu=use_gpu
-)
-
-# Create trainer with custom data loader
-trainer = TensorboardTrainer(cfg, writer)
-
-# Add hook for saving best model
-trainer.register_hooks([
-    hooks.BestCheckpointer(
-        eval_period=100,
-        checkpointer=trainer.checkpointer,
-        val_metric="bbox/AP50",
-        mode="max",
-        file_prefix="model_best"
-    )
-])
-
-trainer.resume_or_load(resume=False)
-
+# Initialize trainer
+trainer = TensorboardTrainer(cfg)
 print("\nStarting training...")
-print("\nTraining started. Open TensorBoard in a new tab with this URL:")
-print(f"http://localhost:6006")
-
-# Override the default training loader with our custom one
-trainer.train_loader = build_custom_train_loader(cfg)
-
-# Start training
+trainer.resume_or_load(resume=False)
 trainer.train()
 
 # Close TensorBoard writer
 writer.close()
 ```
 
-## 11. Save and Export Model
+## 12. Save and Export Model
 
 ```python
 # Save model configuration
@@ -526,7 +521,7 @@ print(f"Saved model configuration to: {config_path}")
 predictor = DefaultPredictor(cfg)
 ```
 
-## 12. Running Inference (Standalone)
+## 13. Running Inference (Standalone)
 
 This section can be run in a new notebook to perform inference using the saved model.
 
@@ -624,7 +619,10 @@ def run_inference(image_path, predictor, confidence_threshold=0.7):
     metadata = MetadataCatalog.get("sa_id_test")
     
     # Create visualization
-    v = Visualizer(image[:, :, ::-1], metadata=metadata, scale=1.0)
+    v = Visualizer(image[:, :, ::-1],
+                   metadata=metadata,
+                   scale=1.0)
+    
     out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
     vis_image = out.get_image()[:, :, ::-1]
     
@@ -697,7 +695,7 @@ if __name__ == "__main__":
         process_images(image_paths, MODEL_PATH, CONFIG_PATH, confidence_threshold=0.7)
 ```
 
-## 13. Save Results Summary
+## 14. Save Results Summary
 
 ```python
 # Save a summary of the model and results
