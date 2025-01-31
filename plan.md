@@ -1,57 +1,112 @@
-# South African ID Detection - Model Validation and Label Studio Integration Plan
+# South African ID Document Processing Project Plan
 
-## 1. Model Validation
-### 1.1. Run Validation Script
-- Load the trained Detectron2 model
-- Run inference on validation dataset
-- Generate visualizations of predictions
-- Calculate and save performance metrics:
-  - AP50 scores for each class
-  - Inference speed
-  - Detection confidence scores
+## Current Status (January 31, 2024)
 
-### 1.2. Error Analysis
-- Identify common failure cases
-- Document detection accuracy for different ID elements
-- Save problematic examples for future retraining
+### Dataset Preparation (Completed)
+- Successfully merged and processed datasets:
+  * Total Images: 101
+  * Training Set: 80 images
+  * Validation Set: 21 images
+  * Format: 800x800 JPEG
+  * Annotations: COCO JSON format
 
-## 2. Label Studio Integration
+### Categories (Finalized)
+1. Field Categories (11):
+   - id_document
+   - surname
+   - names
+   - sex (New ID only)
+   - nationality (New ID only)
+   - id_number
+   - date_of_birth
+   - country_of_birth
+   - citizenship_status
+   - face
+   - signature (New ID only)
 
-### 2.1. Model Export
-- Export Detectron2 model in the correct format
-- Save model weights and configuration
-- Document model input/output specifications
+2. Corner Points (4):
+   - top_left_corner
+   - top_right_corner
+   - bottom_left_corner
+   - bottom_right_corner
 
-### 2.2. Label Studio Setup
-- Install and configure Label Studio
-- Set up a new project for ID detection
-- Configure labeling interface for bounding boxes
-- Define the same label categories as training:
-  - ID Document
-  - Face
-  - Text Fields
-  - Other relevant classes
+## Immediate Tasks
 
-### 2.3. ML Backend Integration
-- Set up Label Studio ML backend
-- Create adapter code to convert between Detectron2 and Label Studio formats
-- Implement prediction endpoint for the model
-- Test model predictions in Label Studio interface
+### 1. Model Training (Priority)
+- Upload train_val_dataset.zip to Google Drive
+- Set up Colab environment
+- Train initial Detectron2 model
+- Evaluate performance metrics
 
-### 2.4. Annotation Workflow
-- Import unlabeled dataset into Label Studio
-- Configure pre-labeling using the trained model
-- Set up review process for model predictions
-- Document annotation guidelines
+### 2. Pipeline Development
+- Integrate classification model
+- Implement field detection
+- Add OCR processing
+- Create structured output format
 
-## 3. Quality Control
-- Review model-generated annotations
-- Track annotation correction rate
-- Monitor annotation consistency
-- Document common correction patterns
+## Technical Implementation
 
-## 4. Next Steps
-- Use the validated model to pre-annotate new data
-- Review and correct model predictions in Label Studio
-- Collect new training data
-- Plan for model retraining with expanded dataset
+### Model Architecture
+- Framework: Detectron2
+- Base Model: ResNet50-FPN
+- Input Size: 800x800 pixels
+- Output: Bounding boxes and keypoints
+
+### Training Environment
+- Platform: Google Colab (GPU)
+- Data Format: COCO JSON
+- Validation Split: 80/20
+
+### Pipeline Components
+1. Document Classification
+2. Field Detection
+3. Corner Point Detection
+4. OCR Processing
+5. Result Generation
+
+## Timeline
+
+### Week 1 (Current)
+- Model Training
+- Initial Evaluation
+- Basic Pipeline Setup
+
+### Week 2
+- Pipeline Integration
+- OCR Implementation
+- Error Handling
+
+### Week 3
+- Testing & Validation
+- Performance Optimization
+- Documentation
+
+## Requirements
+
+### Performance Metrics
+- Classification Accuracy: 99%
+- Field Detection: High precision
+- Processing Time: <10 seconds
+- Output Format: JSON
+
+### Features
+- Document Type Detection
+- Field Extraction
+- Corner Point Detection
+- Text Recognition
+- Confidence Scores
+
+## Next Steps
+1. Upload dataset to Google Drive
+2. Set up Colab training environment
+3. Train initial model
+4. Begin pipeline integration
+5. Implement OCR processing
+6. Create demo interface
+
+## Notes
+- Dataset is properly organized and validated
+- All images standardized to 800x800
+- Corner points included for better accuracy
+- Category system handles both old and new IDs
+- Ready for model training phase

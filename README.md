@@ -1,6 +1,172 @@
 # South African ID Card Information Extraction
 
-A comprehensive solution for extracting and processing information from South African ID cards using both Object Detection and OCR approaches.
+A comprehensive solution for extracting and processing information from South African ID cards using Object Detection and OCR approaches.
+
+## Current Status (January 31, 2024)
+
+### Dataset
+- Total Images: 101
+  * Training Set: 80 images
+  * Validation Set: 21 images
+- Image Format: Standardized to 800x800 JPEG
+- Annotation Format: COCO JSON
+- Categories: 15 total (11 fields + 4 corner points)
+
+### Project Components
+
+#### 1. Object Detection Model (Current Focus)
+- Detectron2-based model for detecting:
+  * Document Fields (11 categories):
+    - id_document
+    - surname
+    - names
+    - sex (New ID only)
+    - nationality (New ID only)
+    - id_number
+    - date_of_birth
+    - country_of_birth
+    - citizenship_status
+    - face
+    - signature (New ID only)
+  * Corner Points (4 categories):
+    - top_left_corner
+    - top_right_corner
+    - bottom_left_corner
+    - bottom_right_corner
+
+#### 2. OCR Processing (Planned)
+- Multiple OCR engine support:
+  - Tesseract OCR
+  - EasyOCR
+  - PaddleOCR
+- Features:
+  - Handles both images (.jpg, .jpeg, .png)
+  - Automatic rotation correction
+  - Region of Interest (ROI) extraction
+  - Parallel processing
+  - Comprehensive preprocessing pipeline
+
+## Setup Instructions
+
+### Prerequisites
+1. Python 3.7+
+2. CUDA-capable GPU (for training)
+3. Required packages in requirements.txt
+
+### Installation
+
+1. Create and activate a virtual environment:
+```bash
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+.venv\Scripts\activate     # Windows
+```
+
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+## Dataset Structure
+
+```
+train_val_dataset.zip
+├── train/
+│   ├── annotations.json (80 images)
+│   └── images/
+└── val/
+    ├── annotations.json (21 images)
+    └── images/
+```
+
+## Training Process
+
+### 1. Data Preparation
+- Dataset has been prepared and split
+- Images standardized to 800x800
+- Annotations in COCO format
+- Corner points added for better accuracy
+
+### 2. Model Training (Next Step)
+- Use Google Colab with GPU runtime
+- Base Model: Detectron2 with ResNet50-FPN
+- Input Size: 800x800 pixels
+- Output: Both bounding boxes and keypoints
+
+### 3. Evaluation
+- Metrics to track:
+  * AP (Average Precision)
+  * AP50 (AP at IoU=0.50)
+  * AP75 (AP at IoU=0.75)
+  * Per-category performance
+  * Processing time
+
+## Pipeline Components
+
+### 1. Document Processing
+- Image preprocessing
+- Size normalization
+- Format standardization
+
+### 2. Field Detection
+- Document boundary detection
+- Field localization
+- Corner point detection
+
+### 3. Text Extraction
+- ROI extraction
+- OCR processing
+- Text validation
+
+### 4. Output Generation
+- JSON format
+- Confidence scores
+- Extracted field values
+
+## Current Progress
+
+✓ Dataset preparation completed
+✓ Image standardization done
+✓ Annotation format unified
+✓ Train/val split created
+➤ Ready for model training
+
+## Next Steps
+
+1. Model Training
+   - Upload dataset to Google Drive
+   - Set up Colab environment
+   - Train initial model
+   - Evaluate performance
+
+2. Pipeline Development
+   - Integrate classification
+   - Add field detection
+   - Implement OCR
+   - Create demo interface
+
+## Performance Requirements
+
+- Classification Accuracy: 99%
+- Field Detection: High precision
+- Processing Time: <10 seconds
+- Output: Structured JSON with confidence scores
+
+## Notes
+
+- Dataset is properly organized and validated
+- All images standardized to 800x800
+- Corner points included for better accuracy
+- Category system handles both old and new IDs
+- Ready for model training phase
+
+## License
+
+[Your License]
+
+## Contributors
+
+[Your Name/Organization]
 
 ## Project Components
 
