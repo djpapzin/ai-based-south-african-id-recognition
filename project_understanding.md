@@ -1,5 +1,95 @@
 # South African ID Document Processing Project
 
+## Current Status (January 31, 2024)
+
+### Dataset
+- Total Images: 101
+  * Training Set: 80 images
+  * Validation Set: 21 images
+- Image Format: Standardized to 800x800 JPEG
+- Annotation Format: COCO JSON
+- Categories: 15 total (11 fields + 4 corner points)
+
+### Dataset Processing Completed
+1. Merged Datasets
+   - Combined Abenathi's and DJ's annotations
+   - Unified category system
+   - Standardized image formats
+   - Validated all annotations
+
+2. Data Preparation
+   - Split into train/val sets (80/20)
+   - Normalized image sizes
+   - Added corner point annotations
+   - Verified dataset integrity
+
+### Category System
+1. Field Categories (Bounding Boxes):
+   - id_document
+   - surname
+   - names
+   - sex (New ID only)
+   - nationality (New ID only)
+   - id_number
+   - date_of_birth
+   - country_of_birth
+   - citizenship_status
+   - face
+   - signature (New ID only)
+
+2. Corner Points (Keypoints):
+   - top_left_corner
+   - top_right_corner
+   - bottom_left_corner
+   - bottom_right_corner
+
+### Technical Approach
+1. Model Architecture
+   - Framework: Detectron2
+   - Environment: Google Colab (GPU)
+   - Input Size: 800x800 pixels
+   - Output: Both bounding boxes and keypoints
+
+2. Training Strategy
+   - Use pre-trained weights
+   - Train on standardized images
+   - Validate on separate test set
+   - Monitor both bbox and keypoint accuracy
+
+### Next Steps
+1. Model Training
+   - Upload dataset to Google Drive
+   - Set up Colab environment
+   - Train initial model
+   - Evaluate performance
+
+2. Pipeline Development
+   - Integrate with classification model
+   - Add field detection
+   - Implement OCR
+   - Create demo interface
+
+### Requirements
+1. Performance
+   - Classification Accuracy: 99%
+   - Field Detection: High precision
+   - Processing Time: <10 seconds
+   - Format: JSON output
+
+2. Features
+   - Document type detection
+   - Field extraction
+   - Corner point detection
+   - Text recognition
+   - Confidence scores
+
+### Notes
+- Dataset is properly organized and validated
+- All images are standardized
+- Corner points included for better accuracy
+- Category system handles both old and new IDs
+- Ready for model training phase
+
 ## 1. Project Overview
 The goal is to develop an AI system for recognizing and extracting metadata from South African ID documents:
 - Traditional green bar-coded ID book
