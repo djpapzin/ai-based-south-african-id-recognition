@@ -35,11 +35,33 @@ The goal is to develop an AI system for recognizing and extracting metadata from
   * Successful document classification model (600+ images)
   * OCR baseline testing (Tesseract, EasyOCR, PaddleOCR)
   * Determined pure OCR approach insufficient
+  * Research findings:
+    - Separate models (classification + detection) recommended for accuracy
+    - Processing speed can be optimized later
+    - Normalization required for precise corner detection
 
 - Phase 2 (Current):
   * Field detection model training
   * Using Detectron2 for object detection
-  * Building end-to-end demo pipeline
+  * Enhanced labeling approach:
+    - Corner point detection for normalization
+    - Consistent field naming convention established
+    - Initial timing estimate: ~22 images per day
+
+### Labeling Process Improvements
+- Enhanced Annotation Strategy:
+  * Corner points for document normalization
+  * Standardized field names across team
+  * More precise than simple bounding boxes
+  * Coordination between team members for consistency
+
+### Time Estimates
+- Current labeling speed: ~22 images per day
+- Manual labeling estimate (500+ images): 2-3 days
+- Team coordination:
+  * Abenathi joining for labeling support
+  * Standardized process documentation
+  * Quality control measures
 
 ## 3. Technical Implementation
 
@@ -83,9 +105,12 @@ The goal is to develop an AI system for recognizing and extracting metadata from
 1. ✓ Document Classification (Completed)
    - 600+ images labeled
    - Model trained and verified
+   - Simple bounding box approach
    
 2. 🔄 Field Detection (Current)
    - Training on 101 images
+   - Enhanced labeling with corner points
+   - Standardized field naming
    - Building demo pipeline
    
 3. 📋 Dataset Expansion
@@ -93,11 +118,13 @@ The goal is to develop an AI system for recognizing and extracting metadata from
    - Options:
      a) Model-assisted labeling (preferred)
      b) Manual labeling (fallback, 2-3 days)
+   - Quality control process established
    
 4. 🎯 Final Implementation
    - Retrain with expanded dataset
    - OCR integration
    - Results generation
+   - Speed optimization if needed
 
 ## 6. Next Steps
 1. Complete current field detection training
@@ -105,7 +132,7 @@ The goal is to develop an AI system for recognizing and extracting metadata from
 3. Test model-assisted labeling in Label Studio
 4. Based on accuracy:
    - If good: Proceed with auto-labeling
-   - If poor: Switch to manual labeling
+   - If poor: Switch to manual labeling (2-3 days)
 5. Implement OCR and complete pipeline
 
 ## 7. Open Questions
@@ -114,14 +141,18 @@ The goal is to develop an AI system for recognizing and extracting metadata from
 1. Field detection model accuracy targets?
 2. OCR confidence threshold and validation rules?
 3. Label Studio integration approach?
+4. Speed optimization strategies if needed?
 
 ### Process
 1. Quality control measures for auto-labeling
 2. Error handling and reporting
 3. Data privacy compliance measures
+4. Team coordination procedures
 
 ## 8. Pending Items
 1. Field detection model training completion
 2. Demo pipeline implementation
 3. Label Studio integration setup
 4. OCR implementation plan
+5. Standardized labeling documentation
+6. Team training on labeling process
