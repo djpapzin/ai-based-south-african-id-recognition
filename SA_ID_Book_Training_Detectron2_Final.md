@@ -160,70 +160,63 @@ def verify_dataset(json_path, images_dir):
 ```python
 def visualize_dataset(dataset_name, num_samples=3):
     """Visualize random samples from the dataset."""
-    dataset_dicts = DatasetCatalog.get(dataset_name)
-    metadata = MetadataCatalog.get(dataset_name)
-    
-    # Get random samples
-    samples = random.sample(dataset_dicts, min(num_samples, len(dataset_dicts)))
-    
-    for d in samples:
-        img = cv2.imread(d["file_name"])
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # Convert to RGB for display
-        visualizer = Visualizer(img, metadata=metadata, scale=0.5)
+        dataset_dicts = DatasetCatalog.get(dataset_name)
+        metadata = MetadataCatalog.get(dataset_name)
         
-        if "annotations" in d:
-            # Draw annotations
-            vis = visualizer.draw_dataset_dict(d)
-        else:
-            vis = visualizer.draw_instance_predictions(d)
+        # Get random samples
+        samples = random.sample(dataset_dicts, min(num_samples, len(dataset_dicts)))
+        
+        for d in samples:
+            img = cv2.imread(d["file_name"])
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # Convert to RGB for display
+            visualizer = Visualizer(img, metadata=metadata, scale=0.5)
             
-        plt.figure(figsize=(15, 10))
-        plt.imshow(vis.get_image())
-        plt.title(f"Sample from {dataset_name}\nFile: {os.path.basename(d['file_name'])}")
-        plt.axis('off')
-        plt.show()
-        print(f"Image size: {img.shape}")
-        print(f"Number of annotations: {len(d.get('annotations', []))}")
+            if "annotations" in d:
+            # Draw annotations
+                vis = visualizer.draw_dataset_dict(d)
+            else:
+                vis = visualizer.draw_instance_predictions(d)
+            
+            plt.figure(figsize=(15, 10))
+            plt.imshow(vis.get_image())
+            plt.title(f"Sample from {dataset_name}\nFile: {os.path.basename(d['file_name'])}")
+            plt.axis('off')
+            plt.show()
+            print(f"Image size: {img.shape}")
+            print(f"Number of annotations: {len(d.get('annotations', []))}")
         print("Annotation types:", [ann.get('category_id', 'unknown') for ann in d.get('annotations', [])])
-        print("-" * 50)
-
+            print("-" * 50)
+            
 def visualize_prediction(predictor, image_path):
     """Visualize model prediction on an image."""
-    im = cv2.imread(image_path)
-    if im is None:
-        print(f"Error: Could not load image from {image_path}")
-        return
+        im = cv2.imread(image_path)
+        if im is None:
+            print(f"Error: Could not load image from {image_path}")
+            return
+            
+        outputs = predictor(im)
         
-    outputs = predictor(im)
-    
-    # Convert BGR to RGB for visualization
-    im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
-    
-    # Create visualizer
-    v = Visualizer(im,
-                   metadata=MetadataCatalog.get("sa_id_val"),
-                   scale=0.8)
-    
-    out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
-    plt.figure(figsize=(15, 10))
-    plt.imshow(out.get_image())
-    plt.title(f"Predictions on {os.path.basename(image_path)}")
-    plt.axis('off')
-    plt.show()
-    
-    # Print prediction details
-    print("\nPrediction Details:")
-    print(f"Number of detections: {len(outputs['instances'])}")
-    if len(outputs['instances']) > 0:
+        # Convert BGR to RGB for visualization
+        im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+        
+        # Create visualizer
+        v = Visualizer(im,
+                       metadata=MetadataCatalog.get("sa_id_val"),
+                       scale=0.8)
+        
+        out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+        plt.figure(figsize=(15, 10))
+        plt.imshow(out.get_image())
+        plt.title(f"Predictions on {os.path.basename(image_path)}")
+        plt.axis('off')
+        plt.show()
+        
+        # Print prediction details
+        print("\nPrediction Details:")
+        print(f"Number of detections: {len(outputs['instances'])}")
+        if len(outputs['instances']) > 0:
         print("Confidence scores:", outputs['instances'].scores.tolist())
         print("Predicted classes:", outputs['instances'].pred_classes.tolist())
-
-# Test the visualization functions
-print("Visualizing training dataset samples:")
-visualize_dataset("sa_id_train", num_samples=2)
-
-print("\nVisualizing validation dataset samples:")
-visualize_dataset("sa_id_val", num_samples=2)
 ```
 
 ## 8. Dataset Annotation Fix Function
@@ -304,52 +297,89 @@ def fix_dataset_annotations(json_path, images_dir):
 ## 9. Setup and Register Datasets
 
 ```python
-# Set paths for your existing dataset structure
-GDRIVE_PATH = "/content/drive/MyDrive/Kwantu/Machine Learning"
-DATASET_PATH = os.path.join(GDRIVE_PATH, "merged_dataset")
+# Set paths for your dataset structure
+DATASET_PATH = "merged_dataset"
 TRAIN_PATH = os.path.join(DATASET_PATH, "train")
 VAL_PATH = os.path.join(DATASET_PATH, "val")
-OUTPUT_DIR = os.path.join(GDRIVE_PATH, "model_output")
+OUTPUT_DIR = "model_output"
 
 # Create output directory
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Fix annotations first
+# Define paths to annotation files and image directories
 train_json = os.path.join(TRAIN_PATH, "annotations.json")
 val_json = os.path.join(VAL_PATH, "annotations.json")
 train_images = os.path.join(TRAIN_PATH, "images")
 val_images = os.path.join(VAL_PATH, "images")
 
-# Fix and get paths to fixed annotation files
-fixed_train_json = fix_dataset_annotations(train_json, train_images)
-fixed_val_json = fix_dataset_annotations(val_json, val_images)
+# Verify paths exist
+print("\nVerifying dataset paths:")
+for path in [train_json, val_json, train_images, val_images]:
+    exists = os.path.exists(path)
+    print(f"{path}: {'✓' if exists else '✗'}")
+    if not exists:
+        raise FileNotFoundError(f"Path not found: {path}")
 
-# Clean up existing registrations
+# Clean up existing registrations if they exist
 for d in ["sa_id_train", "sa_id_val"]:
     if d in DatasetCatalog:
         DatasetCatalog.remove(d)
     if d in MetadataCatalog:
         MetadataCatalog.remove(d)
 
-# Register datasets with fixed annotations
-register_coco_instances("sa_id_train", {}, fixed_train_json, train_images)
-register_coco_instances("sa_id_val", {}, fixed_val_json, val_images)
+# Register the datasets
+print("\nRegistering datasets...")
+register_coco_instances(
+    "sa_id_train",
+    {},
+    train_json,
+    train_images
+)
+register_coco_instances(
+    "sa_id_val",
+    {},
+    val_json,
+    val_images
+)
 
 # Verify registration
 print("\nVerifying dataset registration:")
-train_dicts = DatasetCatalog.get("sa_id_train")
-val_dicts = DatasetCatalog.get("sa_id_val")
-print(f"✓ Training dataset registered with {len(train_dicts)} images")
-print(f"✓ Validation dataset registered with {len(val_dicts)} images")
+try:
+    train_dicts = DatasetCatalog.get("sa_id_train")
+    val_dicts = DatasetCatalog.get("sa_id_val")
+    print(f"✓ Training dataset registered with {len(train_dicts)} images")
+    print(f"✓ Validation dataset registered with {len(val_dicts)} images")
+except KeyError as e:
+    print(f"Error registering datasets: {str(e)}")
+    raise
 
-# Print sample annotation to verify structure
-if len(train_dicts) > 0:
-    sample_dict = train_dicts[0]
-    print("\nSample annotation structure:")
-    if 'annotations' in sample_dict:
-        print(f"Number of annotations: {len(sample_dict['annotations'])}")
-        if len(sample_dict['annotations']) > 0:
-            print("First annotation fields:", sample_dict['annotations'][0].keys())
+# Set metadata
+MetadataCatalog.get("sa_id_train").set(thing_classes=[
+    "id_number", "surname", "names", "nationality",
+    "country_of_birth", "status", "sex", "date_of_birth",
+    "id_number_barcode", "identity_number_back",
+    "control_number", "district_of_birth", "issue_date",
+    "id_photo", "id_book"
+])
+MetadataCatalog.get("sa_id_val").set(thing_classes=[
+    "id_number", "surname", "names", "nationality",
+    "country_of_birth", "status", "sex", "date_of_birth",
+    "id_number_barcode", "identity_number_back",
+    "control_number", "district_of_birth", "issue_date",
+    "id_photo", "id_book"
+])
+
+# Now visualize samples after registration is confirmed
+print("\nVisualizing dataset samples...")
+try:
+    print("\nVisualizing training dataset samples:")
+    visualize_dataset("sa_id_train", num_samples=2)
+    
+    print("\nVisualizing validation dataset samples:")
+    visualize_dataset("sa_id_val", num_samples=2)
+except Exception as e:
+    print(f"Error visualizing datasets: {str(e)}")
+    raise
 ```
 
 ## 10. Dataset Verification
