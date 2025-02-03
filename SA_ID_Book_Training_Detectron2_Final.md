@@ -1,8 +1,5 @@
 # South African ID Book Detection Training with Detectron2
 
-This notebook trains a Detectron2 model for detecting South African ID books using a pre-split dataset.
-The notebook supports both GPU and CPU environments, with automatic device selection.
-
 ## 1. Install Dependencies
 
 ```python
@@ -22,7 +19,7 @@ run_pip_install('git+https://github.com/facebookresearch/detectron2.git')
 print("\nAll dependencies installed successfully!")
 ```
 
-## 2. Import Libraries
+## 2. Import Libraries and Setup Environment
 
 ```python
 print("Importing required libraries...")
@@ -33,6 +30,8 @@ import json
 import random
 import numpy as np
 import torch
+import shutil
+import datetime
 from pathlib import Path
 import matplotlib.pyplot as plt
 from detectron2.utils.logger import setup_logger
@@ -57,14 +56,13 @@ print(f"OpenCV version: {cv2.__version__}")
 print("\nAll libraries imported successfully!")
 ```
 
-## 3. Mount Google Drive
+## 3. Mount Google Drive and Setup Project Directory
 
 ```python
+from google.colab import drive
+
 def mount_google_drive():
     """Mount Google Drive and ensure connection."""
-from google.colab import drive
-    import os
-    
     # Check if already mounted
     if os.path.exists('/content/drive') and os.path.ismount('/content/drive'):
         print("✓ Google Drive is already mounted")
@@ -86,7 +84,7 @@ from google.colab import drive
         print(f"✗ Error mounting Google Drive: {str(e)}")
         return False
 
-# Mount drive and verify project directory
+# Mount drive and set project directory
 if mount_google_drive():
     PROJECT_DIR = "/content/drive/MyDrive/Kwantu/Machine Learning"
     if os.path.exists(PROJECT_DIR):
@@ -96,65 +94,132 @@ if mount_google_drive():
         print("Please make sure your project is in the correct location in Google Drive")
 else:
     raise RuntimeError("Failed to mount Google Drive. Please check your connection and try again.")
-```
 
-## 4. GPU Check Function
-
-```python
-def check_gpu():
-    """Check GPU availability and print device information."""
-    print("\nChecking GPU availability...")
-    print(f"PyTorch version: {torch.__version__}")
-    print(f"CUDA available: {torch.cuda.is_available()}")
-    if torch.cuda.is_available():
-        print(f"CUDA device: {torch.cuda.get_device_name(0)}")
-        print(f"Number of CUDA devices: {torch.cuda.device_count()}")
-        print(f"Current CUDA device: {torch.cuda.current_device()}")
-        return True
-    return False
-
-use_gpu = check_gpu()
+# Check GPU availability
+use_gpu = torch.cuda.is_available()
 print(f"\nUsing {'GPU' if use_gpu else 'CPU'} for training")
+if use_gpu:
+    print(f"GPU device: {torch.cuda.get_device_name(0)}")
 ```
 
-## 5. Training Classes and Configuration
+## 4. Dataset Setup and Validation
 
 ```python
-class CocoTrainer(DefaultTrainer):
-    """Custom trainer class with COCO evaluator."""
-    @classmethod
-    def build_evaluator(cls, cfg, dataset_name, output_folder=None):
-        if output_folder is None:
-            output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
-        return COCOEvaluator(dataset_name, cfg, True, output_folder)
+# Set up paths
+print("\nSetting up dataset paths...")
+DATASET_ROOT = os.path.join(PROJECT_DIR, "merged_dataset")
+TRAIN_PATH = os.path.join(DATASET_ROOT, "train")
+VAL_PATH = os.path.join(DATASET_ROOT, "val")
+OUTPUT_DIR = os.path.join(PROJECT_DIR, "model_output")
 
+# Print paths for verification
+print(f"\nVerifying paths:")
+print(f"Dataset root: {DATASET_ROOT}")
+print(f"Training path: {TRAIN_PATH}")
+print(f"Validation path: {VAL_PATH}")
+print(f"Output directory: {OUTPUT_DIR}")
+
+# Create required directories
+for path in [TRAIN_PATH, VAL_PATH, OUTPUT_DIR]:
+    os.makedirs(path, exist_ok=True)
+    print(f"✓ Verified/created directory: {path}")
+
+# Define paths
+TRAIN_JSON = os.path.join(TRAIN_PATH, "annotations.json")
+VAL_JSON = os.path.join(VAL_PATH, "annotations.json")
+TRAIN_IMGS = os.path.join(TRAIN_PATH, "images")
+VAL_IMGS = os.path.join(VAL_PATH, "images")
+
+# Verify files
+print("\nVerifying dataset files...")
+missing_files = []
+for path in [TRAIN_JSON, VAL_JSON, TRAIN_IMGS, VAL_IMGS]:
+    if os.path.exists(path):
+        print(f"✓ Found: {path}")
+    else:
+        print(f"✗ Missing: {path}")
+        missing_files.append(path)
+
+if missing_files:
+    print("\nError: Missing required files:")
+    for file in missing_files:
+        print(f"- {file}")
+    raise FileNotFoundError(f"Required paths not found: {', '.join(missing_files)}")
+
+# Load and validate class names from annotations
+def get_class_names_from_annotations(json_path):
+    """Extract class names from COCO annotations file."""
+    try:
+        with open(json_path, 'r') as f:
+            data = json.load(f)
+        # Sort categories by id to ensure consistent order
+        categories = sorted(data['categories'], key=lambda x: x['id'])
+        return [cat['name'] for cat in categories]
+    except Exception as e:
+        print(f"Error reading annotations file: {e}")
+        return None
+
+print("\nValidating class names from annotations...")
+train_classes = get_class_names_from_annotations(TRAIN_JSON)
+val_classes = get_class_names_from_annotations(VAL_JSON)
+
+if train_classes is None or val_classes is None:
+    raise RuntimeError("Failed to read class names from annotations")
+
+if train_classes != val_classes:
+    print("\nWarning: Class names differ between training and validation sets!")
+    print("\nTraining classes:", train_classes)
+    print("Validation classes:", val_classes)
+    raise ValueError("Training and validation class names must match")
+
+# Use the actual class names from the dataset
+CLASS_NAMES = train_classes
+print("\nDetected classes:", CLASS_NAMES)
+```
+
+## 5. Model Configuration
+
+```python
 def setup_cfg(train_dataset_name, val_dataset_name, num_classes, output_dir, use_gpu=True):
     """Setup Detectron2 configuration."""
-    print("\nSetting up configuration...")
+    print("\nSetting up Detectron2 configuration...")
     cfg = get_cfg()
-    cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
+    
+    # Load base configuration
+    base_config = "COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"
+    print(f"Loading base configuration: {base_config}")
+    cfg.merge_from_file(model_zoo.get_config_file(base_config))
     
     # Dataset configuration
+    print("\nConfiguring dataset settings...")
     cfg.DATASETS.TRAIN = (train_dataset_name,)
     cfg.DATASETS.TEST = (val_dataset_name,)
     cfg.DATALOADER.NUM_WORKERS = 2
-    cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS = False  # Don't filter out images with no annotations
-    cfg.DATALOADER.ASPECT_RATIO_GROUPING = True  # Group images with similar aspect ratios
+    cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS = False
+    cfg.DATALOADER.ASPECT_RATIO_GROUPING = True
+    print(f"Training dataset: {train_dataset_name}")
+    print(f"Validation dataset: {val_dataset_name}")
+    print(f"Number of dataloader workers: {cfg.DATALOADER.NUM_WORKERS}")
     
     # Model configuration
-    cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
+    print("\nConfiguring model architecture...")
+    cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url(base_config)
     cfg.MODEL.ROI_HEADS.NUM_CLASSES = num_classes
     cfg.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG = True
-    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7  # Set testing threshold
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7
+    print(f"Pre-trained weights: {os.path.basename(cfg.MODEL.WEIGHTS)}")
+    print(f"Number of classes: {num_classes}")
+    print(f"Detection threshold: {cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST}")
     
     # Training configuration
-    if use_gpu:
-        cfg.SOLVER.IMS_PER_BATCH = 2
-    else:
-        cfg.SOLVER.IMS_PER_BATCH = 1
+    print("\nConfiguring training parameters...")
+    cfg.SOLVER.IMS_PER_BATCH = 2 if use_gpu else 1
+    if not use_gpu:
         cfg.MODEL.DEVICE = "cpu"
+        print("Warning: Using CPU for training (this will be slow)")
+    else:
+        print(f"Using GPU: {torch.cuda.get_device_name(0)}")
     
-    # Solver settings
     cfg.SOLVER.BASE_LR = 0.00025
     cfg.SOLVER.MAX_ITER = 5000
     cfg.SOLVER.STEPS = (3000, 4000)
@@ -164,204 +229,360 @@ def setup_cfg(train_dataset_name, val_dataset_name, num_classes, output_dir, use
     cfg.SOLVER.WARMUP_METHOD = "linear"
     cfg.SOLVER.CHECKPOINT_PERIOD = 1000
     
-    # Test settings
+    print(f"Base learning rate: {cfg.SOLVER.BASE_LR}")
+    print(f"Maximum iterations: {cfg.SOLVER.MAX_ITER}")
+    print(f"Learning rate steps: {cfg.SOLVER.STEPS}")
+    print(f"Batch size: {cfg.SOLVER.IMS_PER_BATCH}")
+    print(f"Checkpoint period: {cfg.SOLVER.CHECKPOINT_PERIOD}")
+    
+    # Testing configuration
+    print("\nConfiguring evaluation settings...")
     cfg.TEST.EVAL_PERIOD = 500
-    
-    # ROI settings
     cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 128
-    cfg.MODEL.ROI_HEADS.POSITIVE_FRACTION = 0.25  # Balance positive/negative samples
+    cfg.MODEL.ROI_HEADS.POSITIVE_FRACTION = 0.25
+    print(f"Evaluation period: {cfg.TEST.EVAL_PERIOD}")
+    print(f"RoI batch size per image: {cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE}")
     
-    # Input settings - Add more augmentation
+    # Input settings
+    print("\nConfiguring input settings...")
     cfg.INPUT.MIN_SIZE_TRAIN = (640, 672, 704, 736, 768, 800)
     cfg.INPUT.MAX_SIZE_TRAIN = 1333
     cfg.INPUT.MIN_SIZE_TEST = 800
     cfg.INPUT.MAX_SIZE_TEST = 1333
     cfg.INPUT.RANDOM_FLIP = "horizontal"
-    cfg.INPUT.BRIGHTNESS = 0.8
-    cfg.INPUT.CONTRAST = 0.8
-    cfg.INPUT.SATURATION = 0.8
-    cfg.INPUT.HUE = 0.1
+    print(f"Training size range: {cfg.INPUT.MIN_SIZE_TRAIN} to {cfg.INPUT.MAX_SIZE_TRAIN}")
+    print(f"Testing size range: {cfg.INPUT.MIN_SIZE_TEST} to {cfg.INPUT.MAX_SIZE_TEST}")
     
+    # Output configuration
+    print("\nConfiguring output settings...")
     cfg.OUTPUT_DIR = output_dir
     os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
+    print(f"Output directory: {cfg.OUTPUT_DIR}")
     
-    print("\nConfiguration setup completed successfully!")
-    print("\nConfiguration summary:")
-    print(f"Learning rate: {cfg.SOLVER.BASE_LR}")
-    print(f"Max iterations: {cfg.SOLVER.MAX_ITER}")
-    print(f"Images per batch: {cfg.SOLVER.IMS_PER_BATCH}")
-    print(f"ROI batch size per image: {cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE}")
-    print(f"Number of classes: {cfg.MODEL.ROI_HEADS.NUM_CLASSES}")
-    print(f"Empty annotations filtered: {cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS}")
-    print(f"Data augmentation enabled: Random flip, brightness, contrast, saturation, and hue")
+    # Save configuration
+    config_path = os.path.join(cfg.OUTPUT_DIR, "model_config.yaml")
+    with open(config_path, "w") as f:
+        f.write(cfg.dump())
+    print(f"Configuration saved to: {config_path}")
+    
     return cfg
+
+# Create output directory if not exists
+OUTPUT_DIR = os.path.join(PROJECT_DIR, "model_output")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# Setup the configuration
+cfg = setup_cfg(
+    train_dataset_name="sa_id_train",
+    val_dataset_name="sa_id_val",
+    num_classes=len(CLASS_NAMES),
+    output_dir=OUTPUT_DIR,
+    use_gpu=torch.cuda.is_available()
+)
+
+print("\n✅ Configuration setup complete!")
 ```
 
-## 6. Dataset Investigation
+## 6. Dataset Registration and Visualization
 
 ```python
-print("\nSetting up dataset paths for investigation...")
-DATASET_ROOT = os.path.join(PROJECT_DIR, "merged_dataset")
-TRAIN_PATH = os.path.join(DATASET_ROOT, "train")
-TRAIN_JSON = os.path.join(TRAIN_PATH, "annotations_fixed.json")
-
-# Verify paths
-if not os.path.exists(DATASET_ROOT):
-    raise FileNotFoundError(f"Dataset root not found: {DATASET_ROOT}")
-if not os.path.exists(TRAIN_JSON):
-    raise FileNotFoundError(f"Training annotations not found: {TRAIN_JSON}")
-
-print(f"✓ Using dataset root: {DATASET_ROOT}")
-print(f"✓ Using training annotations: {TRAIN_JSON}")
-
-# Load and examine the annotations file
-print("\nInvestigating dataset annotations...")
+# Import required libraries if not already imported
+import os
+import random
+import traceback
+import cv2
 import json
-with open(TRAIN_JSON, 'r') as f:
-    annotations = json.load(f)
+import matplotlib.pyplot as plt
+from detectron2.data import DatasetCatalog, MetadataCatalog
+from detectron2.utils.visualizer import Visualizer
+from detectron2.data.datasets import register_coco_instances
 
-# Print basic statistics
-print(f"\nDataset Statistics:")
-print(f"Total images in annotations: {len(annotations['images'])}")
-print(f"Total annotations: {len(annotations['annotations'])}")
+# Use PROJECT_DIR from Section 3
+if 'PROJECT_DIR' not in locals():
+    raise RuntimeError("Please run Section 3 first to mount Google Drive and set PROJECT_DIR")
 
-# Check for images without annotations
-image_ids_with_annots = set(ann['image_id'] for ann in annotations['annotations'])
-all_image_ids = set(img['id'] for img in annotations['images'])
-images_without_annots = all_image_ids - image_ids_with_annots
-
-print(f"\nImages without annotations: {len(images_without_annots)}")
-if images_without_annots:
-    print("Warning: Found images without annotations!")
-
-# Check annotation validity
-invalid_annotations = []
-for ann in annotations['annotations']:
-    # Check for empty or invalid bounding boxes
-    if 'bbox' not in ann or len(ann['bbox']) != 4:
-        invalid_annotations.append(('missing_bbox', ann))
-    elif any(coord < 0 for coord in ann['bbox']):
-        invalid_annotations.append(('negative_coords', ann))
-    elif ann['bbox'][2] * ann['bbox'][3] == 0:  # width * height = 0
-        invalid_annotations.append(('zero_area', ann))
-    elif 'category_id' not in ann:
-        invalid_annotations.append(('missing_category', ann))
-
-print(f"\nInvalid annotations found: {len(invalid_annotations)}")
-if invalid_annotations:
-    print("\nWarning: Found invalid annotations!")
-    print("Sample of invalid annotations:")
-    for error_type, ann in invalid_annotations[:5]:
-        print(f"Error type: {error_type}")
-        print(f"Annotation: {ann}\n")
-
-# Check category distribution
-category_counts = {}
-for ann in annotations['annotations']:
-    cat_id = ann['category_id']
-    category_counts[cat_id] = category_counts.get(cat_id, 0) + 1
-
-print("\nCategory distribution:")
-for cat_id, count in category_counts.items():
-    print(f"Category {cat_id}: {count} instances")
-
-print("\nDataset investigation completed!")
-
-# Raise warning if issues found
-if images_without_annots or invalid_annotations:
-    print("\n⚠️ WARNING: Dataset issues detected! Please review the above results before proceeding.")
-            else:
-    print("\n✅ Dataset looks good! No major issues detected.")
-```
-
-## 7. TensorBoard Setup
-
-```python
-# Load and start TensorBoard
-%load_ext tensorboard
-%tensorboard --logdir=model_output/logs
-```
-
-## 8. Dataset Registration and Path Setup
-
-```python
-# Set up paths using PROJECT_DIR
-print("\nSetting up dataset paths...")
+print(f"\nUsing project directory: {PROJECT_DIR}")
 DATASET_ROOT = os.path.join(PROJECT_DIR, "merged_dataset")
 TRAIN_PATH = os.path.join(DATASET_ROOT, "train")
 VAL_PATH = os.path.join(DATASET_ROOT, "val")
-OUTPUT_DIR = os.path.join(PROJECT_DIR, "model_output")
-
-# Ensure directories exist
-for path in [TRAIN_PATH, VAL_PATH, OUTPUT_DIR]:
-    os.makedirs(path, exist_ok=True)
-    print(f"✓ Verified/created directory: {path}")
 
 # Define annotation and image paths
-TRAIN_JSON = os.path.join(TRAIN_PATH, "annotations_fixed.json")
-VAL_JSON = os.path.join(VAL_PATH, "annotations_fixed.json")
+TRAIN_JSON = os.path.join(TRAIN_PATH, "annotations.json")
+VAL_JSON = os.path.join(VAL_PATH, "annotations.json")
 TRAIN_IMGS = os.path.join(TRAIN_PATH, "images")
 VAL_IMGS = os.path.join(VAL_PATH, "images")
 
-# Verify dataset files
-print("\nVerifying dataset files...")
-for path in [TRAIN_JSON, VAL_JSON, TRAIN_IMGS, VAL_IMGS]:
-    if os.path.exists(path):
-        print(f"✓ Found: {path}")
-        else:
-        print(f"✗ Missing: {path}")
-        raise FileNotFoundError(f"Required path not found: {path}")
+# Print paths for verification
+print("\nVerifying dataset paths:")
+print(f"Dataset root: {DATASET_ROOT}")
+print(f"Training annotations: {TRAIN_JSON}")
+print(f"Validation annotations: {VAL_JSON}")
+print(f"Training images: {TRAIN_IMGS}")
+print(f"Validation images: {VAL_IMGS}")
 
-# Register datasets
-print("\nRegistering datasets...")
-try:
-    # Unregister if already registered
+def get_class_names_from_annotations(json_path):
+    """Extract class names from COCO annotations file."""
+    try:
+        with open(json_path, 'r') as f:
+            data = json.load(f)
+        # Sort categories by id to ensure consistent order
+        categories = sorted(data['categories'], key=lambda x: x['id'])
+        return [cat['name'] for cat in categories]
+    except Exception as e:
+        print(f"Error reading annotations file: {e}")
+        return None
+
+def register_and_visualize_datasets(train_json, val_json, train_imgs, val_imgs):
+    """
+    Register datasets and visualize samples with proper error handling.
+    Returns the dataset dictionaries and metadata for further use.
+    """
+    print("\nRegistering datasets...")
+    
+    # Verify paths exist
+    missing_paths = []
+    for path in [train_json, val_json, train_imgs, val_imgs]:
+        if not os.path.exists(path):
+            missing_paths.append(path)
+    
+    if missing_paths:
+        print("\nWarning: The following paths do not exist:")
+        for path in missing_paths:
+            print(f"- {path}")
+        print("\nPlease ensure you have:")
+        print("1. Run Section 3 to mount Google Drive")
+        print("2. Created the dataset structure in your Google Drive")
+        print(f"\nExpected structure in Google Drive:")
+        print(f"{PROJECT_DIR}/")
+        print("└── merged_dataset/")
+        print("    ├── train/")
+        print("    │   ├── images/")
+        print("    │   └── annotations.json")
+        print("    └── val/")
+        print("        ├── images/")
+        print("        └── annotations.json")
+        raise FileNotFoundError("Required dataset paths not found")
+    
+    # Get class names from annotations
+    print("\nExtracting class names from annotations...")
+    train_classes = get_class_names_from_annotations(train_json)
+    val_classes = get_class_names_from_annotations(val_json)
+    
+    if train_classes is None or val_classes is None:
+        raise RuntimeError("Failed to read class names from annotations")
+    
+    if train_classes != val_classes:
+        print("\nWarning: Class names differ between training and validation sets!")
+        print("\nTraining classes:", train_classes)
+        print("Validation classes:", val_classes)
+        raise ValueError("Training and validation class names must match")
+    
+    class_names = train_classes
+    print("\nDetected classes:", class_names)
+    
+    # Unregister existing datasets if present
     for d in ["sa_id_train", "sa_id_val"]:
         if d in DatasetCatalog:
             DatasetCatalog.remove(d)
         if d in MetadataCatalog:
             MetadataCatalog.remove(d)
     
-    # Register datasets
-    register_coco_instances(
-        "sa_id_train",
-        {},
-        TRAIN_JSON,
-        TRAIN_IMGS
-    )
-    register_coco_instances(
-        "sa_id_val",
-        {},
-        VAL_JSON,
-        VAL_IMGS
-    )
-    print("✓ Datasets registered successfully!")
+    try:
+        # Register datasets with empty metadata first
+        register_coco_instances("sa_id_train", {}, train_json, train_imgs)
+        register_coco_instances("sa_id_val", {}, val_json, val_imgs)
+        
+        # Set metadata after registration
+        metadata = MetadataCatalog.get("sa_id_train")
+        metadata.thing_classes = class_names
+        MetadataCatalog.get("sa_id_val").thing_classes = class_names
+        
+        # Load and verify datasets
+        train_dicts = DatasetCatalog.get("sa_id_train")
+        val_dicts = DatasetCatalog.get("sa_id_val")
+        
+        print("✓ Datasets registered successfully!")
+        print(f"\nDataset Statistics:")
+        print(f"- Training images: {len(train_dicts)}")
+        print(f"- Validation images: {len(val_dicts)}")
+        
+        # Count instances per category
+        train_instances = {"total": 0}
+        for d in train_dicts:
+            for ann in d["annotations"]:
+                cat_id = ann["category_id"]
+                cat_name = class_names[cat_id]
+                train_instances[cat_name] = train_instances.get(cat_name, 0) + 1
+                train_instances["total"] += 1
+        
+        print("\nTraining Set Statistics:")
+        print(f"Total instances: {train_instances['total']}")
+        print("\nInstances per category:")
+        for cat_name in class_names:
+            if cat_name in train_instances:
+                print(f"- {cat_name}: {train_instances[cat_name]}")
+        
+        # Visualize samples (in Colab)
+        print("\nVisualizing random training samples with annotations...")
+        
+        for d in random.sample(train_dicts, min(3, len(train_dicts))):
+            img = cv2.imread(d["file_name"])
+            if img is None:
+                print(f"Warning: Could not read image {d['file_name']}")
+                continue
+            
+            print(f"\nDisplaying annotations for: {os.path.basename(d['file_name'])}")
+            print(f"Number of annotations: {len(d['annotations'])}")
+            
+            # Create visualizer with custom settings
+            visualizer = Visualizer(img[:, :, ::-1], 
+                                 metadata=metadata,
+                                 scale=1.0,  # Increased scale for better visibility
+            )
+            
+            # Draw instance annotations
+            vis = visualizer.draw_dataset_dict(d)
+            drawn_img = vis.get_image()[:, :, ::-1]
+            
+            # Display image with annotations
+            plt.figure(figsize=(20, 10))  # Larger figure size
+            plt.imshow(drawn_img)
+            plt.axis('off')
+            
+            # Add title with annotation info
+            class_counts = {}
+            for ann in d["annotations"]:
+                class_name = metadata.thing_classes[ann["category_id"]]
+                class_counts[class_name] = class_counts.get(class_name, 0) + 1
+            
+            title = "Annotations:\n" + "\n".join([f"{cls}: {count}" for cls, count in class_counts.items()])
+            plt.title(title, loc='left', fontsize=10, pad=10)
+            
+            plt.show()
+            plt.close()
+        
+        return train_dicts, val_dicts, metadata
+        
+    except Exception as e:
+        print(f"\nError during dataset setup: {str(e)}")
+        traceback.print_exc()
+        raise
 
-    # Set metadata
-    CLASS_NAMES = [
-        "id_number", "surname", "names", "nationality",
-        "country_of_birth", "status", "sex", "date_of_birth",
-        "id_number_barcode", "identity_number_back",
-        "control_number", "district_of_birth", "issue_date",
-        "id_photo", "id_book"
-    ]
+# Register and visualize the datasets
+train_dicts, val_dicts, metadata = register_and_visualize_datasets(
+    train_json=TRAIN_JSON,
+    val_json=VAL_JSON,
+    train_imgs=TRAIN_IMGS,
+    val_imgs=VAL_IMGS
+)
+
+# Store class names for later use
+CLASS_NAMES = metadata.thing_classes
+```
+
+## 6.5 Pre-Training Verification
+
+```python
+def verify_training_setup():
+    """Verify all requirements are met before starting training."""
+    print("\nVerifying training setup...")
     
-    for d in ["sa_id_train", "sa_id_val"]:
-        MetadataCatalog.get(d).set(thing_classes=CLASS_NAMES)
-    print("✓ Metadata set successfully!")
+    # 1. Check Google Drive mounting
+    if not os.path.exists('/content/drive') or not os.path.ismount('/content/drive'):
+        raise RuntimeError("Google Drive is not mounted. Please run Section 3 first.")
+    
+    # 2. Check project directory
+    if not os.path.exists(PROJECT_DIR):
+        raise RuntimeError(f"Project directory not found: {PROJECT_DIR}")
+    
+    # 3. Verify dataset structure
+    required_paths = {
+        'Dataset Root': DATASET_ROOT,
+        'Training Path': TRAIN_PATH,
+        'Validation Path': VAL_PATH,
+        'Training Images': TRAIN_IMGS,
+        'Validation Images': VAL_IMGS,
+        'Training Annotations': TRAIN_JSON,
+        'Validation Annotations': VAL_JSON
+    }
+    
+    missing_paths = []
+    for name, path in required_paths.items():
+        if not os.path.exists(path):
+            missing_paths.append(f"{name}: {path}")
+    
+    if missing_paths:
+        print("\n❌ Missing required paths:")
+        for path in missing_paths:
+            print(f"- {path}")
+        print("\nPlease ensure your Google Drive has the following structure:")
+        print(f"/content/drive/MyDrive/Kwantu/Machine Learning/")
+        print("├── merged_dataset/")
+        print("│   ├── train/")
+        print("│   │   ├── images/")
+        print("│   │   └── annotations.json")
+        print("│   └── val/")
+        print("│       ├── images/")
+        print("│       └── annotations.json")
+        raise FileNotFoundError("Required dataset structure is incomplete")
+    
+    # 4. Check annotations format
+    try:
+        with open(TRAIN_JSON, 'r') as f:
+            train_anns = json.load(f)
+        with open(VAL_JSON, 'r') as f:
+            val_anns = json.load(f)
+        
+        required_keys = ['images', 'annotations', 'categories']
+        for dataset, anns in [('Training', train_anns), ('Validation', val_anns)]:
+            missing_keys = [k for k in required_keys if k not in anns]
+            if missing_keys:
+                raise KeyError(f"{dataset} annotations missing required keys: {missing_keys}")
+    except json.JSONDecodeError:
+        raise ValueError("Annotations files are not valid JSON")
+    
+    # 5. Check image files
+    print("\nChecking image files...")
+    missing_images = []
+    for dataset, anns in [('Training', train_anns), ('Validation', val_anns)]:
+        img_dir = TRAIN_IMGS if dataset == 'Training' else VAL_IMGS
+        for img in anns['images']:
+            img_path = os.path.join(img_dir, os.path.basename(img['file_name']))
+            if not os.path.exists(img_path):
+                missing_images.append(f"{dataset}: {img['file_name']}")
+    
+    if missing_images:
+        print("\n⚠️ Warning: Some referenced images are missing:")
+        for img in missing_images[:5]:
+            print(f"- {img}")
+        if len(missing_images) > 5:
+            print(f"... and {len(missing_images)-5} more")
+    
+    # 6. Verify GPU availability
+    print("\nChecking GPU availability...")
+    if not torch.cuda.is_available():
+        print("⚠️ Warning: No GPU detected. Training will be slow on CPU.")
+    else:
+        print(f"✓ GPU detected: {torch.cuda.get_device_name(0)}")
+    
+    # 7. Verify dataset registration
+    print("\nVerifying dataset registration...")
+    if "sa_id_train" not in DatasetCatalog:
+        raise RuntimeError("Training dataset not registered. Please run Section 6 first.")
+    if "sa_id_val" not in DatasetCatalog:
+        raise RuntimeError("Validation dataset not registered. Please run Section 6 first.")
+    
+    print("\n✅ All verification checks passed! Ready for training.")
+    return True
 
-    # Verify registration
-    train_dicts = DatasetCatalog.get("sa_id_train")
-    val_dicts = DatasetCatalog.get("sa_id_val")
-    print(f"\nRegistered {len(train_dicts)} training images")
-    print(f"Registered {len(val_dicts)} validation images")
+# Run verification before training
+verify_training_setup()
+```
 
-except Exception as e:
-    print(f"Error during dataset registration: {str(e)}")
-    raise
+## 7. Training and Evaluation
 
+```python
 # Setup configuration
-print("\nSetting up model configuration...")
 cfg = setup_cfg(
     train_dataset_name="sa_id_train",
     val_dataset_name="sa_id_val",
@@ -369,135 +590,38 @@ cfg = setup_cfg(
     output_dir=OUTPUT_DIR,
     use_gpu=use_gpu
 )
-print("✓ Configuration completed!")
-```
 
-## 9. Training
+# Create logs directory for TensorBoard
+os.makedirs(os.path.join(OUTPUT_DIR, "logs"), exist_ok=True)
 
-```python
+# Start TensorBoard
+%load_ext tensorboard
+%tensorboard --logdir=os.path.join(OUTPUT_DIR, "logs")
+
+# Train model
 print("\nStarting model training...")
-print("\nTraining configuration:")
-print(f"Learning rate: {cfg.SOLVER.BASE_LR}")
-print(f"Max iterations: {cfg.SOLVER.MAX_ITER}")
-print(f"Images per batch: {cfg.SOLVER.IMS_PER_BATCH}")
-print(f"ROI batch size per image: {cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE}")
-print(f"Number of classes: {cfg.MODEL.ROI_HEADS.NUM_CLASSES}")
-
 trainer = DefaultTrainer(cfg)
 trainer.resume_or_load(resume=False)
-print("\nTraining started. This may take several hours...")
 trainer.train()
-print("\nTraining completed successfully!")
-```
 
-## 10. Model Evaluation
-
-```python
-print("\nStarting model evaluation...")
-
-# Load the trained model
-print("Loading trained model...")
-cfg.MODEL.WEIGHTS = os.path.join(cfg.OUTPUT_DIR, "model_final.pth")
-cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7
-predictor = DefaultPredictor(cfg)
-print("Model loaded successfully!")
-
-# Run evaluation
-print("\nRunning evaluation on validation dataset...")
-evaluator = COCOEvaluator("sa_id_val", cfg, False, output_dir=cfg.OUTPUT_DIR)
-trainer.test(cfg, trainer.model, evaluators=[evaluator])
-print("Evaluation completed!")
-
-# Visualize some predictions
-print("\nVisualizing predictions on sample images...")
-val_dataset_dicts = DatasetCatalog.get("sa_id_val")
-for d in random.sample(val_dataset_dicts, 3):
-    print(f"\nProcessing image: {os.path.basename(d['file_name'])}")
-    im = cv2.imread(d["file_name"])
-    outputs = predictor(im)
-    v = Visualizer(im[:, :, ::-1],
-                   metadata=MetadataCatalog.get("sa_id_val"),
-                   scale=0.8)
-    out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
-    plt.figure(figsize=(15, 10))
-    plt.imshow(out.get_image()[:, :, ::-1])
-    plt.axis('off')
-    plt.show()
-    
-    # Print prediction details
-    print(f"Number of detections: {len(outputs['instances'])}")
-    if len(outputs['instances']) > 0:
-        print("Confidence scores:", outputs['instances'].scores.tolist())
-        print("Predicted classes:", [
-            MetadataCatalog.get("sa_id_val").thing_classes[i] 
-            for i in outputs['instances'].pred_classes.tolist()
-        ])
-```
-
-## 11. Save Model
-
-```python
+# Save model
 print("\nSaving trained model...")
 final_model_path = os.path.join(OUTPUT_DIR, "sa_id_detector_final.pth")
 torch.save(trainer.model.state_dict(), final_model_path)
-print(f"Model saved successfully to: {final_model_path}")
 
 # Save configuration
 config_path = os.path.join(OUTPUT_DIR, "model_config.yaml")
-print(f"\nSaving model configuration to: {config_path}")
 with open(config_path, "w") as f:
-    cfg_dict = cfg.dump()
-    f.write(cfg_dict)
-print("Configuration saved successfully!")
-```
+    f.write(cfg.dump())
 
-## 12. Inference Function
+# Evaluate model
+print("\nEvaluating model...")
+cfg.MODEL.WEIGHTS = os.path.join(cfg.OUTPUT_DIR, "model_final.pth")
+predictor = DefaultPredictor(cfg)
+evaluator = COCOEvaluator("sa_id_val", cfg, False, output_dir=cfg.OUTPUT_DIR)
+trainer.test(cfg, trainer.model, evaluators=[evaluator])
 
-```python
-def run_inference(image_path, predictor, confidence_threshold=0.7):
-    """
-    Run inference on a single image and visualize results.
-    """
-    print(f"\nRunning inference on: {image_path}")
-    
-    # Read image
-    print("Loading image...")
-    im = cv2.imread(image_path)
-    if im is None:
-        print(f"Error: Could not load image from {image_path}")
-        return None, None
-    
-    # Run inference
-    print("Running model inference...")
-    outputs = predictor(im)
-    
-    # Prepare visualization
-    print("Preparing visualization...")
-    v = Visualizer(im[:, :, ::-1],
-                   metadata=MetadataCatalog.get("sa_id_val"),
-                   scale=0.8)
-    out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
-    
-    # Print results
-    print("\nInference Results:")
-    print(f"Number of detections: {len(outputs['instances'])}")
-    if len(outputs['instances']) > 0:
-        scores = outputs['instances'].scores.tolist()
-        classes = [
-            MetadataCatalog.get("sa_id_val").thing_classes[i] 
-            for i in outputs['instances'].pred_classes.tolist()
-        ]
-        print("Detections:")
-        for cls, score in zip(classes, scores):
-            print(f"- {cls}: {score:.3f}")
-    
-    return outputs, out.get_image()[:, :, ::-1]
-```
-
-## 13. Save Results Summary
-
-```python
-# Save a summary of the model and results
+# Save summary
 summary_path = os.path.join(OUTPUT_DIR, "model_summary.txt")
 with open(summary_path, "w") as f:
     f.write("South African ID Detection Model Summary\n")
@@ -513,4 +637,42 @@ with open(summary_path, "w") as f:
     f.write(f"- Number of classes: {cfg.MODEL.ROI_HEADS.NUM_CLASSES}\n")
     f.write(f"- Detection threshold: {cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST}\n")
 
-print(f"\nSaved model summary to: {summary_path}")
+print(f"\nTraining completed! Summary saved to: {summary_path}")
+```
+
+## 8. Inference Function
+
+```python
+def run_inference(image_path, predictor, confidence_threshold=0.7):
+    """Run inference on a single image and visualize results."""
+    print(f"\nRunning inference on: {image_path}")
+    
+    # Read image
+    im = cv2.imread(image_path)
+    if im is None:
+        print(f"Error: Could not load image from {image_path}")
+        return None, None
+    
+    # Run inference
+    outputs = predictor(im)
+    
+    # Visualize results
+    v = Visualizer(im[:, :, ::-1],
+                   metadata=MetadataCatalog.get("sa_id_val"),
+                   scale=0.8)
+    out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+    
+    # Print results
+    print("\nInference Results:")
+    print(f"Number of detections: {len(outputs['instances'])}")
+    if len(outputs['instances']) > 0:
+        scores = outputs['instances'].scores.tolist()
+        classes = [
+            MetadataCatalog.get("sa_id_val").thing_classes[i] 
+            for i in outputs['instances'].pred_classes.tolist()
+        ]
+        for cls, score in zip(classes, scores):
+            if score >= confidence_threshold:
+                print(f"- {cls}: {score:.3f}")
+    
+    return outputs, out.get_image()[:, :, ::-1]
