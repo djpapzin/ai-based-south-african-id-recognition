@@ -2,37 +2,37 @@
 
 A comprehensive solution for extracting and processing information from South African ID cards using Object Detection and OCR approaches.
 
-## Current Status (January 31, 2024)
+## Current Status (February 4, 2025)
 
 ### Dataset
-- Total Images: 101
-  * Training Set: 80 images
-  * Validation Set: 21 images
-- Image Format: Standardized to 800x800 JPEG
-- Annotation Format: COCO JSON
-- Categories: 15 total (11 fields + 4 corner points)
+- Total Images: 66 images
+  * Training Set: 53 images
+  * Validation Set: 13 images
+- Image Format: Variable size, maintaining aspect ratio
+- Annotation Format: COCO JSON with keypoints
+- Categories: 15 total (fields + corners)
 
 ### Project Components
 
-#### 1. Object Detection Model (Current Focus)
-- Detectron2-based model for detecting:
+#### 1. Object Detection and Keypoint Model (Current Focus)
+- Detectron2-based Keypoint R-CNN model for detecting:
   * Document Fields (11 categories):
     - id_document
     - surname
     - names
-    - sex (New ID only)
-    - nationality (New ID only)
+    - sex
+    - nationality
     - id_number
     - date_of_birth
     - country_of_birth
     - citizenship_status
     - face
-    - signature (New ID only)
-  * Corner Points (4 categories):
-    - top_left_corner
-    - top_right_corner
-    - bottom_left_corner
-    - bottom_right_corner
+    - signature
+  * Corner Keypoints (4 points):
+    - top_left
+    - top_right
+    - bottom_right
+    - bottom_left
 
 #### 2. OCR Processing (Planned)
 - Multiple OCR engine support:
@@ -45,6 +45,28 @@ A comprehensive solution for extracting and processing information from South Af
   - Region of Interest (ROI) extraction
   - Parallel processing
   - Comprehensive preprocessing pipeline
+
+### Model Configuration
+- Architecture: Keypoint R-CNN with ResNet50-FPN backbone
+- Input Processing:
+  - Min size train: 800
+  - Max size train/test: 1333
+  - Aspect ratio preserved
+- Training Parameters:
+  - Batch size: 2 (GPU) or 1 (CPU)
+  - Base learning rate: 0.00025
+  - Learning rate decay: Steps at 3000, 4000 iterations
+  - Total iterations: 5000
+  - Evaluation period: 500 iterations
+- Keypoint Head:
+  - 4 keypoints for corners
+  - 8 conv layers with 512 channels
+  - 14x14 pooler resolution
+  - Loss weight: 1.0
+- ROI Heads:
+  - Batch size per image: 128
+  - Score threshold: 0.7
+  - 15 classes (fields + corners)
 
 ## Setup Instructions
 
@@ -72,10 +94,10 @@ pip install -r requirements.txt
 ```
 train_val_dataset.zip
 ├── train/
-│   ├── annotations.json (80 images)
+│   ├── annotations.json (53 images)
 │   └── images/
 └── val/
-    ├── annotations.json (21 images)
+    ├── annotations.json (13 images)
     └── images/
 ```
 
@@ -83,14 +105,14 @@ train_val_dataset.zip
 
 ### 1. Data Preparation
 - Dataset has been prepared and split
-- Images standardized to 800x800
-- Annotations in COCO format
-- Corner points added for better accuracy
+- Images standardized to variable size with aspect ratio
+- Annotations in COCO format with keypoints
+- Corner keypoints added for better accuracy
 
 ### 2. Model Training (Next Step)
 - Use Google Colab with GPU runtime
-- Base Model: Detectron2 with ResNet50-FPN
-- Input Size: 800x800 pixels
+- Base Model: Keypoint R-CNN with ResNet50-FPN backbone
+- Input Size: Dynamic with max size 1333
 - Output: Both bounding boxes and keypoints
 
 ### 3. Evaluation
@@ -126,23 +148,23 @@ train_val_dataset.zip
 ## Current Progress
 
 ✓ Dataset preparation completed
-✓ Image standardization done
-✓ Annotation format unified
+✓ Annotation format unified with keypoints
 ✓ Train/val split created
-➤ Ready for model training
+✓ Model configuration optimized
+➤ Ready for training with keypoint detection
 
 ## Next Steps
 
 1. Model Training
-   - Upload dataset to Google Drive
-   - Set up Colab environment
-   - Train initial model
-   - Evaluate performance
+   - Run initial training with keypoint detection
+   - Monitor keypoint detection accuracy
+   - Evaluate both bbox and keypoint performance
+   - Fine-tune model parameters if needed
 
 2. Pipeline Development
-   - Integrate classification
-   - Add field detection
-   - Implement OCR
+   - Implement corner-based document alignment
+   - Add field detection with keypoint guidance
+   - Integrate OCR processing
    - Create demo interface
 
 ## Performance Requirements
@@ -155,8 +177,8 @@ train_val_dataset.zip
 ## Notes
 
 - Dataset is properly organized and validated
-- All images standardized to 800x800
-- Corner points included for better accuracy
+- All images standardized to variable size with aspect ratio
+- Corner keypoints included for better accuracy
 - Category system handles both old and new IDs
 - Ready for model training phase
 
@@ -170,8 +192,8 @@ train_val_dataset.zip
 
 ## Project Components
 
-### 1. Object Detection Model (Current Focus)
-- Detectron2-based model for detecting key regions in ID cards:
+### 1. Object Detection and Keypoint Model (Current Focus)
+- Detectron2-based Keypoint R-CNN model for detecting key regions in ID cards:
   - ID Number
   - Names
   - Surname

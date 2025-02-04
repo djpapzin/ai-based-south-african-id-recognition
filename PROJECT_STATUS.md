@@ -1,9 +1,9 @@
 # South African ID Document Detection - Project Status
 
-## Latest Update: January 31, 2024
+## Latest Update: February 4, 2025
 
 ### Current Status
-Currently training Detectron2 model for South African ID document field detection. The model is being trained on a dataset of 101 images (80 training, 21 validation) using Faster R-CNN with ResNet50-FPN backbone in Google Colab environment.
+Currently implementing Keypoint R-CNN model for South African ID document field and corner detection. The model is being trained on a dataset of 66 images (53 training, 13 validation) using Keypoint R-CNN with ResNet50-FPN backbone, configured for both field detection and keypoint estimation.
 
 ### Recent Achievements
 1. Dataset Preparation:
@@ -18,12 +18,36 @@ Currently training Detectron2 model for South African ID document field detectio
    - Implemented proper dataset registration
    - Added visualization functions
 
+3. Dataset Enhancement:
+   - Converted to keypoint format with 66 validated images
+   - Split into 53 training/13 validation
+   - Preserved aspect ratios for better quality
+   - COCO JSON annotations with keypoints
+
+4. Model Configuration:
+   - Switched to Keypoint R-CNN architecture
+   - Configured custom keypoint head
+   - Implemented corner point detection
+   - Added proper keypoint visualization
+
 ### Technical Details
 - Model: Faster R-CNN with ResNet50-FPN
 - Environment: Google Colab (GPU)
 - Framework: Detectron2
 - Image Size: 800x800 pixels
 - Categories: 15 total (11 fields + 4 corners)
+
+1. Model Architecture:
+   - Base: Keypoint R-CNN with ResNet50-FPN
+   - Keypoint Head: 8 conv layers (512 channels)
+   - Input: Variable size with max 1333px
+   - Output: Bounding boxes + 4 keypoints
+
+2. Training Configuration:
+   - Batch Size: 2 (GPU) / 1 (CPU)
+   - Learning Rate: 0.00025 with decay
+   - Iterations: 5000
+   - Evaluation Period: 500 iterations
 
 ### Key Files
 1. `SA_ID_Book_Training_Detectron2_Final.md` - Main training script
@@ -40,11 +64,23 @@ Currently training Detectron2 model for South African ID document field detectio
 - Score Threshold: 0.7
 
 ### Next Steps
-1. Complete initial training run
-2. Evaluate model performance
-3. Implement validation metrics logging
-4. Fine-tune if needed
-5. Create inference pipeline
+1. Training Phase:
+   - Run initial training
+   - Monitor keypoint accuracy
+   - Evaluate performance
+   - Fine-tune if needed
+
+2. Development:
+   - Implement corner-based alignment
+   - Enhance field detection
+   - Add OCR processing
+   - Create demo interface
+
+3. Complete initial training run
+4. Evaluate model performance
+5. Implement validation metrics logging
+6. Fine-tune if needed
+7. Create inference pipeline
 
 ### Issues to Watch
 - TensorBoard integration in Colab

@@ -1,27 +1,27 @@
 # South African ID Document Processing Project
 
-## Current Status (January 31, 2024)
+## Current Status (February 4, 2025)
 
 ### Dataset
-- Total Images: 101
-  * Training Set: 80 images
-  * Validation Set: 21 images
-- Image Format: Standardized to 800x800 JPEG
-- Annotation Format: COCO JSON
-- Categories: 15 total (11 fields + 4 corner points)
+- Total Images: 66
+  * Training Set: 53 images
+  * Validation Set: 13 images
+- Image Format: Variable size (preserving aspect ratio)
+- Annotation Format: COCO JSON with keypoints
+- Categories: 15 total (11 fields + 4 keypoints)
 
 ### Dataset Processing Completed
-1. Merged Datasets
-   - Combined Abenathi's and DJ's annotations
-   - Unified category system
-   - Standardized image formats
+1. Dataset Preparation
+   - Unified annotation format with keypoints
+   - Preserved image aspect ratios
+   - Added corner keypoint annotations
    - Validated all annotations
 
 2. Data Preparation
-   - Split into train/val sets (80/20)
-   - Normalized image sizes
-   - Added corner point annotations
-   - Verified dataset integrity
+   - Split into train/val sets
+   - Added keypoint metadata
+   - Configured for Keypoint R-CNN
+   - Ready for training
 
 ### Category System
 1. Field Categories (Bounding Boxes):
@@ -43,11 +43,23 @@
    - bottom_left_corner
    - bottom_right_corner
 
+### Model Architecture
+1. Base Model
+   - Keypoint R-CNN with ResNet50-FPN backbone
+   - Configured for both detection and keypoint estimation
+   - Custom keypoint head for corner detection
+
+2. Training Configuration
+   - Batch size: 2 (GPU) / 1 (CPU)
+   - Learning rate: 0.00025 with decay
+   - 5000 iterations with evaluation every 500
+   - 8 conv layers in keypoint head
+
 ### Technical Approach
 1. Model Architecture
    - Framework: Detectron2
    - Environment: Google Colab (GPU)
-   - Input Size: 800x800 pixels
+   - Input Size: Variable size (preserving aspect ratio)
    - Output: Both bounding boxes and keypoints
 
 2. Training Strategy
@@ -111,9 +123,9 @@ The goal is to develop an AI system for recognizing and extracting metadata from
 
 ### Current Step 2: Field Detection
 #### Current Dataset
-- Total Images: 101
-  * Training Set: 80 images
-  * Validation Set: 21 images
+- Total Images: 66
+  * Training Set: 53 images
+  * Validation Set: 13 images
 - Label Characteristics:
   * 12 labels per image (fields within ID)
   * No duplicate labels
@@ -198,7 +210,7 @@ The goal is to develop an AI system for recognizing and extracting metadata from
    - Simple bounding box approach
    
 2. 🔄 Field Detection (Current)
-   - Training on 101 images
+   - Training on 66 images
    - Enhanced labeling with corner points
    - Standardized field naming
    - Building demo pipeline

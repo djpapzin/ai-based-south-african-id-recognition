@@ -1,60 +1,83 @@
 # South African ID Recognition Project Plan
 
 ## Project Overview
-An automated system for detecting and extracting information from South African ID documents using computer vision and OCR technologies.
+An automated system for detecting and extracting information from South African ID documents using computer vision and OCR technologies, with advanced keypoint detection for document alignment.
 
 ## Project Status Overview
 
 ### Completed Tasks:
 1. Dataset Preparation
-   - Successfully merged Abenathi's and DJ's datasets
-   - Total of 101 fully labeled images
-   - Split into 80 training and 21 validation images
-   - All images standardized to 800x800 pixels
+   - Refined dataset to 66 high-quality images
+   - Split into 53 training and 13 validation images
+   - Added keypoint annotations for corners
+   - Preserved image aspect ratios
    - Unified category system for both old and new IDs
 
-2. Data Processing
-   - Implemented corner point detection
-   - Standardized image formats and sizes
-   - Validated all annotations
-   - Created clean train/val split
-   - Prepared dataset for Colab training
+2. Model Architecture
+   - Selected Keypoint R-CNN architecture
+   - Configured ResNet50-FPN backbone
+   - Implemented custom keypoint head
+   - Set up corner point detection
+
+3. Training Configuration
+   - Optimized batch sizes for GPU/CPU
+   - Configured learning rate schedule
+   - Set up evaluation metrics
+   - Prepared TensorBoard logging
 
 ### Current Phase:
-- Ready for model training with:
-  * Training set: 80 images
-  * Validation set: 21 images
-  * 15 unified categories including:
-    - 11 field categories (id_document, surname, names, etc.)
-    - 4 corner point categories
-  * Both bounding boxes and keypoints
+1. Model Training
+   - Keypoint R-CNN implementation
+   - Corner point detection
+   - Field localization
+   - Performance monitoring
 
-## Implementation Strategy
+2. Technical Setup
+   - Batch size: 2 (GPU) / 1 (CPU)
+   - Learning rate: 0.00025
+   - 5000 iterations
+   - 500 iteration evaluation period
 
-### Immediate Next Steps:
-1. Model Training (Priority)
-   - Upload train_val_dataset.zip to Google Drive
-   - Set up Colab environment
-   - Train initial model
-   - Evaluate performance
+### Next Steps:
+1. Training & Evaluation
+   - Run initial training
+   - Monitor keypoint accuracy
+   - Evaluate field detection
+   - Fine-tune parameters
 
 2. Pipeline Development
-   - Integrate classification model
-   - Add field detection
-   - Implement OCR
-   - Create JSON output structure
+   - Implement corner-based alignment
+   - Enhance field detection
+   - Add OCR processing
+   - Create demo interface
 
-### Short-term Goals (This Week):
-1. Complete model training
-2. Evaluate model performance
-3. Begin pipeline integration
-4. Test on new images
+3. Documentation & Deployment
+   - Update technical documentation
+   - Create usage guidelines
+   - Prepare deployment package
+   - Set up monitoring
 
-### Medium-term Goals:
-1. Complete end-to-end pipeline
-2. Add error handling
-3. Implement confidence scores
-4. Create demo interface
+## Timeline
+1. February 2025
+   - Complete initial training
+   - Evaluate performance
+   - Begin pipeline development
+
+2. March 2025
+   - Finalize model training
+   - Complete OCR integration
+   - Deploy initial version
+
+## Success Metrics
+1. Model Performance
+   - Keypoint detection accuracy > 95%
+   - Field detection accuracy > 90%
+   - Processing time < 2 seconds
+
+2. System Reliability
+   - Robust to image variations
+   - Accurate corner detection
+   - Reliable text extraction
 
 ## Technical Stack
 - Object Detection: Detectron2
@@ -67,10 +90,10 @@ An automated system for detecting and extracting information from South African 
 ```
 train_val_dataset.zip
 ├── train/
-│   ├── annotations.json (80 images)
+│   ├── annotations.json (53 images)
 │   └── images/
 └── val/
-    ├── annotations.json (21 images)
+    ├── annotations.json (13 images)
     └── images/
 ```
 
@@ -100,14 +123,6 @@ train_val_dataset.zip
 - Processing Time: <10 seconds total
 - Output: Normalized, accurate field coordinates
 - Format: Structured JSON with confidence scores
-
-## Next Steps
-1. Set up Colab training environment
-2. Train initial model
-3. Evaluate performance
-4. Begin pipeline integration
-5. Implement confidence scoring
-6. Create demo interface
 
 ## Notes
 - Dataset is now properly organized and validated
