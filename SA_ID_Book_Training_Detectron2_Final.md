@@ -77,8 +77,8 @@ def mount_google_drive():
 # Mount drive and set project directory
 if mount_google_drive():
     DRIVE_ROOT = "/content/drive/MyDrive/Kwantu/Machine Learning"
-    TRAIN_JSON = os.path.join(DRIVE_ROOT, "merged_dataset/train/annotations.json")
-    VAL_JSON = os.path.join(DRIVE_ROOT, "merged_dataset/val/annotations.json")
+    TRAIN_JSON = os.path.join(DRIVE_ROOT, "merged_dataset/train/annotations_keypoints.json")
+    VAL_JSON = os.path.join(DRIVE_ROOT, "merged_dataset/val/annotations_keypoints.json")
     TRAIN_IMGS = os.path.join(DRIVE_ROOT, "merged_dataset/train/images")
     VAL_IMGS = os.path.join(DRIVE_ROOT, "merged_dataset/val/images")
     OUTPUT_DIR = os.path.join(DRIVE_ROOT, "model_output")
@@ -128,144 +128,47 @@ verify_colab_dataset()
 ## 4. Register and Verify Dataset
 
 ```python
-# Clear any existing registrations
-if "sa_id_train" in DatasetCatalog:
-    DatasetCatalog.remove("sa_id_train")
-if "sa_id_val" in DatasetCatalog:
-    DatasetCatalog.remove("sa_id_val")
-if "sa_id_train" in MetadataCatalog:
-    MetadataCatalog.remove("sa_id_train")
-if "sa_id_val" in MetadataCatalog:
-    MetadataCatalog.remove("sa_id_val")
+class CocoTrainer(DefaultTrainer):
+    """Custom trainer class with COCO evaluator."""
+    @classmethod
+    def build_evaluator(cls, cfg, dataset_name, output_folder=None):
+        if output_folder is None:
+            output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
+        return COCOEvaluator(dataset_name, cfg, True, output_folder)
 
-# Define categories and metadata
-categories = [
-    {"id": 0, "name": "bottom_left_corner", "supercategory": "corner"},
-    {"id": 1, "name": "bottom_right_corner", "supercategory": "corner"},
-    {"id": 2, "name": "citizenship_status", "supercategory": "field"},
-    {"id": 3, "name": "country_of_birth", "supercategory": "field"},
-    {"id": 4, "name": "date_of_birth", "supercategory": "field"},
-    {"id": 5, "name": "face", "supercategory": "field"},
-    {"id": 6, "name": "id_document", "supercategory": "document"},
-    {"id": 7, "name": "id_number", "supercategory": "field"},
-    {"id": 8, "name": "names", "supercategory": "field"},
-    {"id": 9, "name": "nationality", "supercategory": "field"},
-    {"id": 10, "name": "sex", "supercategory": "field"},
-    {"id": 11, "name": "signature", "supercategory": "field"},
-    {"id": 12, "name": "surname", "supercategory": "field"},
-    {"id": 13, "name": "top_left_corner", "supercategory": "corner"},
-    {"id": 14, "name": "top_right_corner", "supercategory": "corner"}
-]
+def setup_cfg(train_dataset_name, val_dataset_name, num_classes, output_dir, use_gpu=True):
+    """Setup Detectron2 configuration."""
+    cfg = get_cfg()
+    cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
 
-# Create metadata dict
-metadata_dict = {
-    "thing_classes": [cat["name"] for cat in categories],
-    "thing_dataset_id_to_contiguous_id": {cat["id"]: i for i, cat in enumerate(categories)},
-    "keypoint_names": ["top_left_corner", "top_right_corner", "bottom_right_corner", "bottom_left_corner"],
-    "keypoint_flip_map": [],  # No flipping for document corners
-    "keypoint_connection_rules": [
-        ("top_left_corner", "top_right_corner", (102, 204, 255)),  # top edge
-        ("top_right_corner", "bottom_right_corner", (102, 204, 255)),  # right edge
-        ("bottom_right_corner", "bottom_left_corner", (102, 204, 255)),  # bottom edge
-        ("bottom_left_corner", "top_left_corner", (102, 204, 255))  # left edge
-    ]
-}
+    # Dataset configuration
+    cfg.DATASETS.TRAIN = (train_dataset_name,)
+    cfg.DATASETS.TEST = (val_dataset_name,)
+    cfg.DATALOADER.NUM_WORKERS = 2
 
-# Print paths for verification
-print("\nVerifying annotation paths:")
-print(f"Train annotations: {TRAIN_JSON}")
-print(f"Train images: {TRAIN_IMGS}")
-print(f"Val annotations: {VAL_JSON}")
-print(f"Val images: {VAL_IMGS}")
+    # Model configuration
+    cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = num_classes
+    cfg.MODEL.ROI_BOX_HEAD.CLS_AGNOSTIC_BBOX_REG = True
 
-# Verify files exist
-for path in [TRAIN_JSON, VAL_JSON, TRAIN_IMGS, VAL_IMGS]:
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Path does not exist: {path}")
-    print(f"✓ Found: {path}")
+    # Training configuration
+    if use_gpu:
+        cfg.SOLVER.IMS_PER_BATCH = 2
+    else:
+        cfg.SOLVER.IMS_PER_BATCH = 1
+        cfg.MODEL.DEVICE = "cpu"
 
-# Register datasets
-print("\nRegistering datasets...")
-register_coco_instances(
-    "sa_id_train",
-    metadata_dict,
-    TRAIN_JSON,
-    TRAIN_IMGS
-)
-register_coco_instances(
-    "sa_id_val",
-    metadata_dict,
-    VAL_JSON,
-    VAL_IMGS
-)
+    cfg.SOLVER.BASE_LR = 0.00025
+    cfg.SOLVER.MAX_ITER = 5000
+    cfg.SOLVER.STEPS = (3000, 4000)
+    cfg.SOLVER.GAMMA = 0.1
+    cfg.TEST.EVAL_PERIOD = 500
+    cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 128
 
-# Verify registration and visualize sample with keypoints
-def visualize_sample_with_keypoints(dataset_name="sa_id_train", num_samples=2):
-    """Visualize sample images with keypoints from the dataset."""
-    dataset_dicts = DatasetCatalog.get(dataset_name)
-    metadata = MetadataCatalog.get(dataset_name)
-    
-    for d in random.sample(dataset_dicts, num_samples):
-        img = cv2.imread(d["file_name"])
-        if img is None:
-            print(f"Could not read image: {d['file_name']}")
-            continue
-            
-        visualizer = Visualizer(img[:, :, ::-1], metadata=metadata, scale=0.5)
-        
-        # Draw all annotations
-        vis = visualizer.draw_dataset_dict(d)
-        
-        # Check for corner annotations
-        corner_anns = [ann for ann in d["annotations"] 
-                      if ann["category_id"] in [0, 1, 13, 14]]  # Corner category IDs
-        
-        if corner_anns:
-            print(f"\nFound {len(corner_anns)} corner annotations in {d['file_name']}")
-            for ann in corner_anns:
-                corner_type = metadata.thing_classes[ann["category_id"]]
-                bbox = ann["bbox"]
-                print(f"Corner: {corner_type}")
-                print(f"Position: x={bbox[0]:.1f}, y={bbox[1]:.1f}")
-                
-                # Draw corner points with labels
-                x, y = int(bbox[0]), int(bbox[1])
-                cv2.circle(vis.output.get_image(), (x, y), 5, (0, 255, 0), -1)
-                cv2.putText(vis.output.get_image(), corner_type, 
-                          (x + 5, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 
-                          0.5, (0, 255, 0), 2)
-            
-            # Draw connections between corners if we have all four
-            corner_points = {}
-            for ann in corner_anns:
-                corner_type = metadata.thing_classes[ann["category_id"]]
-                bbox = ann["bbox"]
-                corner_points[corner_type] = (int(bbox[0]), int(bbox[1]))
-            
-            if len(corner_points) == 4:
-                corners_ordered = ["top_left_corner", "top_right_corner", 
-                                 "bottom_right_corner", "bottom_left_corner"]
-                for i in range(4):
-                    pt1 = corner_points[corners_ordered[i]]
-                    pt2 = corner_points[corners_ordered[(i + 1) % 4]]
-                    cv2.line(vis.output.get_image(), pt1, pt2, (102, 204, 255), 2)
-        else:
-            print(f"\nNo corner annotations found in {d['file_name']}")
-        
-        # Display using matplotlib
-        plt.figure(figsize=(15, 10))
-        plt.imshow(vis.get_image()[:, :, ::-1])
-        plt.axis('off')
-        plt.title(f"Sample from {dataset_name}")
-        plt.show()
+    cfg.OUTPUT_DIR = output_dir
+    os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
 
-# Verify registration
-print("\nRegistered datasets:")
-print(f"Training: {len(DatasetCatalog.get('sa_id_train'))} images")
-print(f"Validation: {len(DatasetCatalog.get('sa_id_val'))} images")
-
-print("\nVisualizing training samples with keypoints:")
-visualize_sample_with_keypoints("sa_id_train")
+    return cfg
 ```
 
 ## 5. Configure and Train Model
@@ -274,7 +177,7 @@ visualize_sample_with_keypoints("sa_id_train")
 class CustomTrainer(DefaultTrainer):
     @classmethod
     def build_evaluator(cls, cfg, dataset_name):
-            output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
+        output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
         return COCOEvaluator(dataset_name, cfg, True, output_folder)
 
 def setup_cfg(train_dataset="sa_id_train", val_dataset="sa_id_val"):
@@ -296,7 +199,7 @@ def setup_cfg(train_dataset="sa_id_train", val_dataset="sa_id_val"):
     cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE = 0
     
     # Model config
-    cfg.MODEL.ROI_HEADS.NUM_CLASSES = 11  # Number of object classes
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(categories)  # Number of object classes
     cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 128
     
     # Training config
@@ -320,6 +223,12 @@ def setup_cfg(train_dataset="sa_id_train", val_dataset="sa_id_val"):
 
 # Set up configuration
 cfg = setup_cfg()
+
+print("\nModel Configuration:")
+print(f"Number of keypoints: {cfg.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS}")
+print(f"Number of classes: {cfg.MODEL.ROI_HEADS.NUM_CLASSES}")
+print(f"Training iterations: {cfg.SOLVER.MAX_ITER}")
+print(f"Learning rate: {cfg.SOLVER.BASE_LR}")
 
 # Initialize trainer
 trainer = CustomTrainer(cfg)
