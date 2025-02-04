@@ -174,6 +174,40 @@ def setup_cfg(train_dataset_name, val_dataset_name, num_classes, output_dir, use
 ## 5. Configure and Train Model
 
 ```python
+def register_datasets():
+    """Register the SA ID datasets with keypoint metadata."""
+    # Define keypoint names and connections
+    keypoint_names = ["top_left_corner", "top_right_corner", "bottom_right_corner", "bottom_left_corner"]
+    keypoint_flip_map = []  # No flipping needed for corners
+    keypoint_connection_rules = [
+        ("top_left_corner", "top_right_corner", (102, 204, 255)),
+        ("top_right_corner", "bottom_right_corner", (102, 204, 255)),
+        ("bottom_right_corner", "bottom_left_corner", (102, 204, 255)),
+        ("bottom_left_corner", "top_left_corner", (102, 204, 255)),
+    ]
+
+    # Register train dataset
+    register_coco_instances(
+        "sa_id_train",
+        {},
+        TRAIN_JSON,  # Using paths defined in section 3
+        TRAIN_IMGS
+    )
+    # Register validation dataset
+    register_coco_instances(
+        "sa_id_val",
+        {},
+        VAL_JSON,
+        VAL_IMGS
+    )
+
+    # Add keypoint metadata
+    for split in ["sa_id_train", "sa_id_val"]:
+        meta = MetadataCatalog.get(split)
+        meta.keypoint_names = keypoint_names
+        meta.keypoint_flip_map = keypoint_flip_map
+        meta.keypoint_connection_rules = keypoint_connection_rules
+
 class CocoKeypointTrainer(DefaultTrainer):
     """Custom trainer class with COCO evaluator for keypoint detection."""
     @classmethod
@@ -182,7 +216,7 @@ class CocoKeypointTrainer(DefaultTrainer):
             output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
         return COCOEvaluator(dataset_name, cfg, True, output_folder)
 
-def setup_training_cfg(num_classes=15):  # 15 classes including all fields and corners
+def setup_training_cfg():
     """Setup configuration for training."""
     cfg = get_cfg()
     
@@ -196,9 +230,15 @@ def setup_training_cfg(num_classes=15):  # 15 classes including all fields and c
     
     # Model configuration
     cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Keypoints/keypoint_rcnn_R_50_FPN_3x.yaml")
-    cfg.MODEL.ROI_HEADS.NUM_CLASSES = num_classes
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = 15  # 15 classes including all fields and corners
     cfg.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS = 4  # 4 corners
     cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE = 0
+    
+    # Keypoint configuration
+    cfg.MODEL.KEYPOINT_ON = True
+    cfg.MODEL.ROI_KEYPOINT_HEAD.CONV_DIMS = tuple([512] * 8)
+    cfg.MODEL.ROI_KEYPOINT_HEAD.LOSS_WEIGHT = 1.0
+    cfg.MODEL.ROI_KEYPOINT_HEAD.POOLER_RESOLUTION = 14
     
     # Training configuration
     if torch.cuda.is_available():
@@ -225,6 +265,10 @@ def setup_training_cfg(num_classes=15):  # 15 classes including all fields and c
     os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
     
     return cfg
+
+# Register datasets before training
+print("\nRegistering datasets...")
+register_datasets()
 
 # Set up configuration
 print("\nSetting up training configuration...")
