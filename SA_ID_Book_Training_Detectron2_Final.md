@@ -174,39 +174,45 @@ def setup_cfg(train_dataset_name, val_dataset_name, num_classes, output_dir, use
 ## 5. Configure and Train Model
 
 ```python
-class CustomTrainer(DefaultTrainer):
+class CocoKeypointTrainer(DefaultTrainer):
+    """Custom trainer class with COCO evaluator for keypoint detection."""
     @classmethod
-    def build_evaluator(cls, cfg, dataset_name):
-        output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
+    def build_evaluator(cls, cfg, dataset_name, output_folder=None):
+        if output_folder is None:
+            output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
         return COCOEvaluator(dataset_name, cfg, True, output_folder)
 
-def setup_cfg(train_dataset="sa_id_train", val_dataset="sa_id_val"):
-    """Set up model configuration for keypoint detection."""
+def setup_training_cfg(num_classes=15):  # 15 classes including all fields and corners
+    """Setup configuration for training."""
     cfg = get_cfg()
     
     # Load Keypoint R-CNN base config
     cfg.merge_from_file(model_zoo.get_config_file("COCO-Keypoints/keypoint_rcnn_R_50_FPN_3x.yaml"))
     
     # Dataset config
-    cfg.DATASETS.TRAIN = (train_dataset,)
-    cfg.DATASETS.TEST = (val_dataset,)
+    cfg.DATASETS.TRAIN = ("sa_id_train",)
+    cfg.DATASETS.TEST = ("sa_id_val",)
+    cfg.DATALOADER.NUM_WORKERS = 2
     
-    # Initialize from Keypoint R-CNN pretrained model
+    # Model configuration
     cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Keypoints/keypoint_rcnn_R_50_FPN_3x.yaml")
-    
-    # Keypoint head config
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = num_classes
     cfg.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS = 4  # 4 corners
     cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE = 0
     
-    # Model config
-    cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(categories)  # Number of object classes
-    cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 128
+    # Training configuration
+    if torch.cuda.is_available():
+        cfg.SOLVER.IMS_PER_BATCH = 2
+    else:
+        cfg.SOLVER.IMS_PER_BATCH = 1
+        cfg.MODEL.DEVICE = "cpu"
     
-    # Training config
-    cfg.SOLVER.IMS_PER_BATCH = 2
     cfg.SOLVER.BASE_LR = 0.00025
     cfg.SOLVER.MAX_ITER = 5000
-    cfg.SOLVER.STEPS = []  # No learning rate decay
+    cfg.SOLVER.STEPS = (3000, 4000)
+    cfg.SOLVER.GAMMA = 0.1
+    cfg.TEST.EVAL_PERIOD = 500
+    cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 128
     
     # Input config
     cfg.INPUT.MIN_SIZE_TRAIN = (800,)
@@ -218,20 +224,25 @@ def setup_cfg(train_dataset="sa_id_train", val_dataset="sa_id_val"):
     cfg.OUTPUT_DIR = OUTPUT_DIR
     cfg.TENSORBOARD.ENABLED = True
     cfg.TENSORBOARD.LOG_DIR = LOG_DIR
+    os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
     
     return cfg
 
 # Set up configuration
-cfg = setup_cfg()
+print("\nSetting up training configuration...")
+cfg = setup_training_cfg()
 
 print("\nModel Configuration:")
-print(f"Number of keypoints: {cfg.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS}")
 print(f"Number of classes: {cfg.MODEL.ROI_HEADS.NUM_CLASSES}")
+print(f"Number of keypoints: {cfg.MODEL.ROI_KEYPOINT_HEAD.NUM_KEYPOINTS}")
 print(f"Training iterations: {cfg.SOLVER.MAX_ITER}")
 print(f"Learning rate: {cfg.SOLVER.BASE_LR}")
+print(f"Batch size: {cfg.SOLVER.IMS_PER_BATCH}")
+print(f"Using device: {'GPU' if torch.cuda.is_available() else 'CPU'}")
 
 # Initialize trainer
-trainer = CustomTrainer(cfg)
+print("\nInitializing trainer...")
+trainer = CocoKeypointTrainer(cfg)
 
 # Start training
 print("\nStarting training...")
