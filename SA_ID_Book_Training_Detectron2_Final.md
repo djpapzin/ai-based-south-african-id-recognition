@@ -222,8 +222,6 @@ def setup_training_cfg(num_classes=15):  # 15 classes including all fields and c
     
     # Output config
     cfg.OUTPUT_DIR = OUTPUT_DIR
-    cfg.TENSORBOARD.ENABLED = True
-    cfg.TENSORBOARD.LOG_DIR = LOG_DIR
     os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
     
     return cfg
