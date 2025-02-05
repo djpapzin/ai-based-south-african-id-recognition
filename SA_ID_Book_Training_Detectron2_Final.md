@@ -819,6 +819,7 @@ def run_inference(image_path, confidence_threshold=0.5, cfg=None):
         cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
         
         predictor = DefaultPredictor(cfg)
+        # Fix weights_only warning
         predictor.model.load_state_dict(
             torch.load(cfg.MODEL.WEIGHTS, 
                       map_location=cfg.MODEL.DEVICE,
@@ -833,8 +834,11 @@ def run_inference(image_path, confidence_threshold=0.5, cfg=None):
     if image is None:
         raise ValueError(f"Could not read image at {image_path}")
     
-    # Run inference
-    with torch.cuda.amp.autocast(enabled=cfg.MODEL.DEVICE=='cuda'):
+    # Run inference with updated autocast
+    if cfg.MODEL.DEVICE == 'cuda':
+        with torch.amp.autocast('cuda'):
+            outputs = predictor(image)
+    else:
         outputs = predictor(image)
     
     # Visualize results
@@ -1113,6 +1117,7 @@ def run_inference(image_path, confidence_threshold=0.5, cfg=None):
         cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
         
         predictor = DefaultPredictor(cfg)
+        # Fix weights_only warning
         predictor.model.load_state_dict(
             torch.load(cfg.MODEL.WEIGHTS, 
                       map_location=cfg.MODEL.DEVICE,
@@ -1127,8 +1132,11 @@ def run_inference(image_path, confidence_threshold=0.5, cfg=None):
     if image is None:
         raise ValueError(f"Could not read image at {image_path}")
     
-    # Run inference
-    with torch.cuda.amp.autocast(enabled=cfg.MODEL.DEVICE=='cuda'):
+    # Run inference with updated autocast
+    if cfg.MODEL.DEVICE == 'cuda':
+        with torch.amp.autocast('cuda'):
+            outputs = predictor(image)
+    else:
         outputs = predictor(image)
     
     # Visualize results
