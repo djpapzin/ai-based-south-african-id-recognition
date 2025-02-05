@@ -4,6 +4,7 @@ import shutil
 from sklearn.model_selection import train_test_split
 import logging
 import re
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -110,13 +111,76 @@ def prepare_dataset(coco_file, image_dir, output_dir, train_split=0.8):
     logger.info(f"Training set: {len(train_ids)} images, {len(train_coco['annotations'])} annotations")
     logger.info(f"Validation set: {len(val_ids)} images, {len(val_coco['annotations'])} annotations")
 
-if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser(description='Prepare dataset for Colab')
-    parser.add_argument('--coco-file', required=True, help='Path to COCO JSON file')
-    parser.add_argument('--image-dir', required=True, help='Path to image directory')
-    parser.add_argument('--output-dir', required=True, help='Output directory for split dataset')
-    parser.add_argument('--train-split', type=float, default=0.8, help='Proportion of training set')
+def verify_dataset():
+    """Verify the merged_dataset structure and print statistics."""
+    print("Verifying merged_dataset structure...")
     
-    args = parser.parse_args()
-    prepare_dataset(args.coco_file, args.image_dir, args.output_dir, args.train_split) 
+    # Define paths
+    dataset_dir = "merged_dataset"
+    
+    # Verify dataset structure
+    required_files = [
+        "train/annotations.json",
+        "train/images",
+        "val/annotations.json",
+        "val/images"
+    ]
+    
+    for file_path in required_files:
+        full_path = os.path.join(dataset_dir, file_path)
+        if not os.path.exists(full_path):
+            raise FileNotFoundError(f"Required path not found: {full_path}")
+    
+    # Print dataset statistics
+    print("\nDataset Statistics:")
+    total_size = 0
+    
+    for split in ['train', 'val']:
+        ann_path = os.path.join(dataset_dir, split, "annotations.json")
+        img_dir = os.path.join(dataset_dir, split, "images")
+        
+        # Get annotation file size
+        ann_size = os.path.getsize(ann_path) / (1024 * 1024)  # MB
+        total_size += ann_size
+        
+        with open(ann_path, 'r') as f:
+            data = json.load(f)
+        
+        num_images = len(data['images'])
+        num_annotations = len(data['annotations'])
+        categories = {cat['name']: 0 for cat in data['categories']}
+        
+        # Count annotations per category
+        for ann in data['annotations']:
+            cat_name = next(cat['name'] for cat in data['categories'] if cat['id'] == ann['category_id'])
+            categories[cat_name] += 1
+        
+        print(f"\n{split.upper()} Set:")
+        print(f"  Images: {num_images}")
+        print(f"  Total Annotations: {num_annotations}")
+        print("  Annotations per category:")
+        for cat_name, count in categories.items():
+            print(f"    - {cat_name}: {count}")
+        
+        # Calculate images size
+        print(f"\nVerifying {split} set images...")
+        for img_info in data['images']:
+            img_path = os.path.join(dataset_dir, split, "images", img_info['file_name'])
+            if os.path.exists(img_path):
+                img_size = os.path.getsize(img_path) / (1024 * 1024)  # MB
+                total_size += img_size
+                print(f"  Verified: {img_info['file_name']} ({img_size:.1f} MB)")
+            else:
+                print(f"  Warning: Could not find {img_info['file_name']}")
+    
+    print(f"\nTotal dataset size: {total_size:.1f} MB")
+    
+    print("\nColab Setup:")
+    print("Use these paths in your notebook:")
+    print("   TRAIN_JSON = '/content/drive/MyDrive/Kwantu/Machine Learning/merged_dataset/train/annotations.json'")
+    print("   VAL_JSON = '/content/drive/MyDrive/Kwantu/Machine Learning/merged_dataset/val/annotations.json'")
+    print("   TRAIN_IMGS = '/content/drive/MyDrive/Kwantu/Machine Learning/merged_dataset/train/images'")
+    print("   VAL_IMGS = '/content/drive/MyDrive/Kwantu/Machine Learning/merged_dataset/val/images'")
+
+if __name__ == "__main__":
+    verify_dataset() 
