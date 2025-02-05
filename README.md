@@ -2,20 +2,20 @@
 
 A comprehensive solution for extracting and processing information from South African ID cards using Object Detection and OCR approaches.
 
-## Current Status (February 4, 2025)
+## Current Status (February 5, 2024)
 
 ### Dataset
 - Total Images: 66 images
-  * Training Set: 53 images
-  * Validation Set: 13 images
+  * Training Set: 52 images
+  * Validation Set: 14 images
 - Image Format: Variable size, maintaining aspect ratio
-- Annotation Format: COCO JSON with keypoints
-- Categories: 15 total (fields + corners)
+- Annotation Format: COCO JSON
+- Categories: 11 fields
 
 ### Project Components
 
-#### 1. Object Detection and Keypoint Model (Current Focus)
-- Detectron2-based Keypoint R-CNN model for detecting:
+#### 1. Object Detection Model (Current Focus)
+- Detectron2-based Faster R-CNN model for detecting:
   * Document Fields (11 categories):
     - id_document
     - surname
@@ -28,11 +28,6 @@ A comprehensive solution for extracting and processing information from South Af
     - citizenship_status
     - face
     - signature
-  * Corner Keypoints (4 points):
-    - top_left
-    - top_right
-    - bottom_right
-    - bottom_left
 
 #### 2. OCR Processing (Planned)
 - Multiple OCR engine support:
@@ -41,32 +36,27 @@ A comprehensive solution for extracting and processing information from South Af
   - PaddleOCR
 - Features:
   - Handles both images (.jpg, .jpeg, .png)
-  - Automatic rotation correction
+  - Automatic preprocessing
   - Region of Interest (ROI) extraction
   - Parallel processing
   - Comprehensive preprocessing pipeline
 
 ### Model Configuration
-- Architecture: Keypoint R-CNN with ResNet50-FPN backbone
+- Architecture: Faster R-CNN with ResNet50-FPN backbone
 - Input Processing:
   - Min size train: 800
   - Max size train/test: 1333
   - Aspect ratio preserved
 - Training Parameters:
-  - Batch size: 2 (GPU) or 1 (CPU)
+  - Batch size: 2 (GPU)
   - Base learning rate: 0.00025
   - Learning rate decay: Steps at 3000, 4000 iterations
   - Total iterations: 5000
-  - Evaluation period: 500 iterations
-- Keypoint Head:
-  - 4 keypoints for corners
-  - 8 conv layers with 512 channels
-  - 14x14 pooler resolution
-  - Loss weight: 1.0
+  - Evaluation period: 1000 iterations
 - ROI Heads:
   - Batch size per image: 128
-  - Score threshold: 0.7
-  - 15 classes (fields + corners)
+  - Score threshold: 0.5
+  - 11 classes (fields)
 
 ## Setup Instructions
 
@@ -92,28 +82,28 @@ pip install -r requirements.txt
 ## Dataset Structure
 
 ```
-train_val_dataset.zip
+train_val_dataset/
 ├── train/
-│   ├── annotations.json (53 images)
+│   ├── annotations.json (52 images)
 │   └── images/
 └── val/
-    ├── annotations.json (13 images)
+    ├── annotations.json (14 images)
     └── images/
 ```
 
 ## Training Process
 
-### 1. Data Preparation
-- Dataset has been prepared and split
-- Images standardized to variable size with aspect ratio
-- Annotations in COCO format with keypoints
-- Corner keypoints added for better accuracy
+### 1. Data Preparation (Completed)
+- Dataset prepared and split
+- Images standardized with aspect ratio
+- Annotations in COCO format
+- Field categories finalized
 
-### 2. Model Training (Next Step)
-- Use Google Colab with GPU runtime
-- Base Model: Keypoint R-CNN with ResNet50-FPN backbone
-- Input Size: Dynamic with max size 1333
-- Output: Both bounding boxes and keypoints
+### 2. Model Training (In Progress)
+- Using Google Colab with GPU runtime
+- Base Model: Faster R-CNN with ResNet50-FPN
+- Input Size: Variable with max 1333px
+- Output: Field bounding boxes
 
 ### 3. Evaluation
 - Metrics to track:
@@ -133,7 +123,7 @@ train_val_dataset.zip
 ### 2. Field Detection
 - Document boundary detection
 - Field localization
-- Corner point detection
+- Text region detection
 
 ### 3. Text Extraction
 - ROI extraction
@@ -148,39 +138,37 @@ train_val_dataset.zip
 ## Current Progress
 
 ✓ Dataset preparation completed
-✓ Annotation format unified with keypoints
-✓ Train/val split created
+✓ Training infrastructure setup
 ✓ Model configuration optimized
-➤ Ready for training with keypoint detection
+→ Training in progress
+→ Evaluation pipeline ready
 
 ## Next Steps
 
 1. Model Training
-   - Run initial training with keypoint detection
-   - Monitor keypoint detection accuracy
-   - Evaluate both bbox and keypoint performance
-   - Fine-tune model parameters if needed
+   - Complete initial training
+   - Monitor performance metrics
+   - Evaluate field detection
+   - Fine-tune if needed
 
 2. Pipeline Development
-   - Implement corner-based document alignment
-   - Add field detection with keypoint guidance
+   - Implement inference pipeline
+   - Add field detection
    - Integrate OCR processing
    - Create demo interface
 
 ## Performance Requirements
 
-- Classification Accuracy: 99%
-- Field Detection: High precision
+- Field Detection Accuracy: 90%+
 - Processing Time: <10 seconds
 - Output: Structured JSON with confidence scores
 
 ## Notes
 
-- Dataset is properly organized and validated
-- All images standardized to variable size with aspect ratio
-- Corner keypoints included for better accuracy
-- Category system handles both old and new IDs
-- Ready for model training phase
+- Dataset properly organized and validated
+- Training infrastructure working correctly
+- Initial training showing promising results
+- Ready for completion of training phase
 
 ## License
 

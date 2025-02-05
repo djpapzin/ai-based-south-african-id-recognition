@@ -1,96 +1,103 @@
 # South African ID Document Detection - Project Status
 
-## Latest Update: February 4, 2025
+## Latest Update: February 5, 2024
 
 ### Current Status
-Currently implementing Keypoint R-CNN model for South African ID document field and corner detection. The model is being trained on a dataset of 66 images (53 training, 13 validation) using Keypoint R-CNN with ResNet50-FPN backbone, configured for both field detection and keypoint estimation.
+Currently training Faster R-CNN model for South African ID document field detection. The model is being trained on a dataset of 66 images (52 training, 14 validation) using Faster R-CNN with ResNet50-FPN backbone, configured for field detection and text region localization.
 
 ### Recent Achievements
 1. Dataset Preparation:
-   - Merged and validated 101 images
-   - Split into 80 training/21 validation
-   - Standardized to 800x800 JPEG format
-   - COCO JSON annotations with 15 categories
+   - Processed and validated 66 images
+   - Split into 52 training/14 validation
+   - Variable size format preserving aspect ratios
+   - COCO JSON annotations with 11 categories
 
 2. Training Setup:
    - Configured Detectron2 with ResNet50-FPN
    - Set up TensorBoard monitoring
    - Implemented proper dataset registration
-   - Added visualization functions
+   - Added evaluation hooks
+   - Configured validation pipeline
 
 3. Dataset Enhancement:
-   - Converted to keypoint format with 66 validated images
-   - Split into 53 training/13 validation
-   - Preserved aspect ratios for better quality
-   - COCO JSON annotations with keypoints
+   - Standardized annotations
+   - Fixed image dimension mismatches
+   - Improved path handling
+   - Validated all annotations
 
 4. Model Configuration:
-   - Switched to Keypoint R-CNN architecture
-   - Configured custom keypoint head
-   - Implemented corner point detection
-   - Added proper keypoint visualization
+   - Implemented Faster R-CNN architecture
+   - Configured field detection
+   - Set up evaluation metrics
+   - Added proper visualization tools
 
 ### Technical Details
 - Model: Faster R-CNN with ResNet50-FPN
 - Environment: Google Colab (GPU)
 - Framework: Detectron2
-- Image Size: 800x800 pixels
-- Categories: 15 total (11 fields + 4 corners)
+- Image Size: Variable with max 1333px
+- Categories: 11 fields
 
 1. Model Architecture:
-   - Base: Keypoint R-CNN with ResNet50-FPN
-   - Keypoint Head: 8 conv layers (512 channels)
+   - Base: Faster R-CNN with ResNet50-FPN
+   - ROI Head: Standard configuration
    - Input: Variable size with max 1333px
-   - Output: Bounding boxes + 4 keypoints
+   - Output: Field bounding boxes
 
 2. Training Configuration:
-   - Batch Size: 2 (GPU) / 1 (CPU)
+   - Batch Size: 2 (GPU)
    - Learning Rate: 0.00025 with decay
    - Iterations: 5000
-   - Evaluation Period: 500 iterations
+   - Evaluation Period: 1000 iterations
 
 ### Key Files
-1. `SA_ID_Book_Training_Detectron2_Final.md` - Main training script
-2. `merged_dataset/`
-   - `train/` (annotations.json + 80 images)
-   - `val/` (annotations.json + 21 images)
-3. `model_output/` - Training logs and checkpoints
+1. Training Infrastructure:
+   - Main training script
+   - Dataset registration
+   - Model configuration
+   - Evaluation setup
+
+2. Dataset Structure:
+   - `train/` (annotations.json + 52 images)
+   - `val/` (annotations.json + 14 images)
+   - Model output directory
+   - Training logs
 
 ### Training Parameters
 - Learning Rate: 0.00025
 - Max Iterations: 5000
 - Batch Size: 2
 - ROI Batch Size: 128
-- Score Threshold: 0.7
+- Score Threshold: 0.5
 
 ### Next Steps
 1. Training Phase:
-   - Run initial training
-   - Monitor keypoint accuracy
-   - Evaluate performance
+   - Complete initial training
+   - Monitor performance metrics
+   - Evaluate field detection
    - Fine-tune if needed
 
 2. Development:
-   - Implement corner-based alignment
-   - Enhance field detection
+   - Implement inference pipeline
    - Add OCR processing
    - Create demo interface
+   - Document usage
 
-3. Complete initial training run
-4. Evaluate model performance
-5. Implement validation metrics logging
-6. Fine-tune if needed
-7. Create inference pipeline
+3. Immediate Tasks:
+   - Complete training run
+   - Evaluate model performance
+   - Implement validation metrics logging
+   - Begin inference pipeline
 
 ### Issues to Watch
-- TensorBoard integration in Colab
-- Dataset visualization confirmation
-- Training metrics monitoring
+- Training convergence monitoring
+- Field detection accuracy
+- Processing time optimization
 
 ### Search Tags
 #detectron2 #object-detection #south-african-id #document-processing #machine-learning #computer-vision #faster-rcnn #resnet50 #coco-dataset #field-detection
 
 ### Related Documents
-- `project_understanding.md` - Detailed project documentation
-- `SA_ID_Recognition_Project_Plan.md` - Project roadmap
-- `requirements.txt` - Dependencies list 
+- `plan.md` - Project plan and timeline
+- `SA_ID_Recognition_Project_Plan.md` - Detailed project documentation
+- `README.md` - Setup and usage instructions 

@@ -1,13 +1,13 @@
 # South African ID Document Processing Project Plan
 
-## Current Status (January 31, 2024)
+## Current Status (February 5, 2024)
 
 ### Dataset Preparation (Completed)
 - Successfully merged and processed datasets:
-  * Total Images: 101
-  * Training Set: 80 images
-  * Validation Set: 21 images
-  * Format: 800x800 JPEG
+  * Total Images: 66
+  * Training Set: 52 images
+  * Validation Set: 14 images
+  * Format: Variable size (preserving aspect ratio)
   * Annotations: COCO JSON format
 
 ### Categories (Finalized)
@@ -15,61 +15,79 @@
    - id_document
    - surname
    - names
-   - sex (New ID only)
-   - nationality (New ID only)
+   - sex
+   - nationality
    - id_number
    - date_of_birth
    - country_of_birth
    - citizenship_status
    - face
-   - signature (New ID only)
+   - signature
 
-2. Corner Points (4):
-   - top_left_corner
-   - top_right_corner
-   - bottom_left_corner
-   - bottom_right_corner
+### Current Progress
+1. Dataset Preparation ✓
+   - Dataset split and organized
+   - Annotations converted to COCO format
+   - Image dimensions verified and fixed
+   - Path handling improved
 
-## Immediate Tasks
+2. Model Training (In Progress)
+   - Faster R-CNN with ResNet50-FPN
+   - Training Configuration:
+     * Batch size: 2
+     * Learning rate: 0.00025
+     * Max iterations: 5000
+     * Evaluation period: 1000 iterations
 
-### 1. Model Training (Priority)
-- Upload train_val_dataset.zip to Google Drive
-- Set up Colab environment
-- Train initial Detectron2 model
-- Evaluate performance metrics
+3. Training Infrastructure
+   - Google Colab GPU setup complete
+   - Detectron2 installation successful
+   - Dataset registration working
+   - Evaluation hooks configured
+
+## Next Steps
+
+### 1. Complete Training
+- Monitor training progress
+- Evaluate model performance
+- Fine-tune if necessary
 
 ### 2. Pipeline Development
-- Integrate classification model
-- Implement field detection
+- Implement inference pipeline
 - Add OCR processing
 - Create structured output format
+
+### 3. Documentation & Testing
+- Update technical documentation
+- Create usage guidelines
+- Comprehensive testing
 
 ## Technical Implementation
 
 ### Model Architecture
 - Framework: Detectron2
-- Base Model: ResNet50-FPN
-- Input Size: 800x800 pixels
-- Output: Bounding boxes and keypoints
+- Base Model: Faster R-CNN with ResNet50-FPN
+- Input Size: Variable with max 1333px
+- Output: Bounding boxes for fields
 
 ### Training Environment
 - Platform: Google Colab (GPU)
 - Data Format: COCO JSON
-- Validation Split: 80/20
+- Validation Split: 80/20 (52/14)
 
 ### Pipeline Components
-1. Document Classification
+1. Document Detection
 2. Field Detection
-3. Corner Point Detection
-4. OCR Processing
-5. Result Generation
+3. OCR Processing
+4. Result Generation
 
 ## Timeline
 
 ### Week 1 (Current)
-- Model Training
-- Initial Evaluation
-- Basic Pipeline Setup
+- ✓ Dataset Preparation
+- ✓ Training Setup
+- → Model Training
+- → Initial Evaluation
 
 ### Week 2
 - Pipeline Integration
@@ -92,21 +110,11 @@
 ### Features
 - Document Type Detection
 - Field Extraction
-- Corner Point Detection
 - Text Recognition
 - Confidence Scores
 
-## Next Steps
-1. Upload dataset to Google Drive
-2. Set up Colab training environment
-3. Train initial model
-4. Begin pipeline integration
-5. Implement OCR processing
-6. Create demo interface
-
 ## Notes
-- Dataset is properly organized and validated
-- All images standardized to 800x800
-- Corner points included for better accuracy
-- Category system handles both old and new IDs
-- Ready for model training phase
+- Dataset successfully processed and validated
+- Training infrastructure working correctly
+- Initial training showing promising results
+- Ready for full training completion

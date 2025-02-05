@@ -1,52 +1,52 @@
 # South African ID Recognition Project Plan
 
 ## Project Overview
-An automated system for detecting and extracting information from South African ID documents using computer vision and OCR technologies, with advanced keypoint detection for document alignment.
+An automated system for detecting and extracting information from South African ID documents using computer vision and OCR technologies.
 
 ## Project Status Overview
 
 ### Completed Tasks:
-1. Dataset Preparation
+1. Dataset Preparation ✓
    - Refined dataset to 66 high-quality images
-   - Split into 53 training and 13 validation images
-   - Added keypoint annotations for corners
+   - Split into 52 training and 14 validation images
+   - Standardized annotations
    - Preserved image aspect ratios
-   - Unified category system for both old and new IDs
+   - Unified category system
 
-2. Model Architecture
-   - Selected Keypoint R-CNN architecture
+2. Model Architecture ✓
+   - Selected Faster R-CNN architecture
    - Configured ResNet50-FPN backbone
-   - Implemented custom keypoint head
-   - Set up corner point detection
+   - Implemented evaluation hooks
+   - Set up TensorBoard logging
 
-3. Training Configuration
-   - Optimized batch sizes for GPU/CPU
+3. Training Configuration ✓
+   - Optimized batch sizes for GPU
    - Configured learning rate schedule
    - Set up evaluation metrics
-   - Prepared TensorBoard logging
+   - Prepared validation pipeline
 
 ### Current Phase:
 1. Model Training
-   - Keypoint R-CNN implementation
-   - Corner point detection
-   - Field localization
+   - Faster R-CNN implementation
+   - Field detection training
    - Performance monitoring
+   - Regular evaluation
 
 2. Technical Setup
-   - Batch size: 2 (GPU) / 1 (CPU)
+   - Batch size: 2 (GPU)
    - Learning rate: 0.00025
    - 5000 iterations
-   - 500 iteration evaluation period
+   - 1000 iteration evaluation period
 
 ### Next Steps:
 1. Training & Evaluation
-   - Run initial training
-   - Monitor keypoint accuracy
+   - Complete initial training
+   - Monitor performance metrics
    - Evaluate field detection
    - Fine-tune parameters
 
 2. Pipeline Development
-   - Implement corner-based alignment
+   - Implement inference pipeline
    - Enhance field detection
    - Add OCR processing
    - Create demo interface
@@ -58,25 +58,25 @@ An automated system for detecting and extracting information from South African 
    - Set up monitoring
 
 ## Timeline
-1. February 2025
+1. February 2024
    - Complete initial training
    - Evaluate performance
    - Begin pipeline development
 
-2. March 2025
+2. March 2024
    - Finalize model training
    - Complete OCR integration
    - Deploy initial version
 
 ## Success Metrics
 1. Model Performance
-   - Keypoint detection accuracy > 95%
    - Field detection accuracy > 90%
    - Processing time < 2 seconds
+   - High precision in text regions
 
 2. System Reliability
    - Robust to image variations
-   - Accurate corner detection
+   - Accurate field detection
    - Reliable text extraction
 
 ## Technical Stack
@@ -88,44 +88,37 @@ An automated system for detecting and extracting information from South African 
 
 ## Dataset Structure
 ```
-train_val_dataset.zip
+train_val_dataset/
 ├── train/
-│   ├── annotations.json (53 images)
+│   ├── annotations.json (52 images)
 │   └── images/
 └── val/
-    ├── annotations.json (13 images)
+    ├── annotations.json (14 images)
     └── images/
 ```
 
 ## Categories
-1. Bounding Box Categories:
+1. Field Categories:
    - id_document
    - surname
    - names
-   - sex (New ID only)
-   - nationality (New ID only)
+   - sex
+   - nationality
    - id_number
    - date_of_birth
    - country_of_birth
    - citizenship_status
    - face
-   - signature (New ID only)
-
-2. Keypoint Categories:
-   - top_left_corner
-   - top_right_corner
-   - bottom_left_corner
-   - bottom_right_corner
+   - signature
 
 ## Performance Requirements
-- Document Classification: 99% accuracy
-- Field Detection: High precision using corner points
+- Document Detection: 99% accuracy
+- Field Detection: High precision
 - Processing Time: <10 seconds total
-- Output: Normalized, accurate field coordinates
-- Format: Structured JSON with confidence scores
+- Output: Structured JSON with confidence scores
 
 ## Notes
-- Dataset is now properly organized and validated
-- All images are standardized to 800x800
-- Corner points are included for better accuracy
-- Category system handles both old and new IDs
+- Dataset is properly organized and validated
+- Training infrastructure is working correctly
+- Initial training showing promising results
+- Ready for completion of training phase
