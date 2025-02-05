@@ -4,10 +4,19 @@
 
 # Mount Google Drive
 from google.colab import drive
+import os
+
+# Check if drive is already mounted
+if os.path.exists('/content/drive'):
+    print("Drive is already mounted. Unmounting first...")
+    !fusermount -u /content/drive
+    !rm -rf /content/drive
+
+# Mount Google Drive
+print("Mounting Google Drive...")
 drive.mount('/content/drive')
 
 # Verify the dataset directory exists
-import os
 print("\nVerifying paths...")
 DRIVE_ROOT = "/content/drive/MyDrive/Kwantu/Machine Learning"
 DATASET_ROOT = os.path.join(DRIVE_ROOT, "dj_dataset")
