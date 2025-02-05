@@ -73,8 +73,8 @@ print("\nAll libraries imported successfully!")
 # Set project directory paths for Colab
 DRIVE_ROOT = "/content/drive/MyDrive/Kwantu/Machine Learning"
 DATASET_ROOT = os.path.join(DRIVE_ROOT, "dj_dataset")
-LABEL_STUDIO_EXPORT = os.path.join(DATASET_ROOT, "result.json")  # Label Studio export file
-IMAGES_DIR = os.path.join(DATASET_ROOT, "images")  # Original images directory
+LABEL_STUDIO_EXPORT = os.path.join(DATASET_ROOT, "result.json")  # result.json is directly in dj_dataset
+IMAGES_DIR = os.path.join(DATASET_ROOT, "images")  # images folder is directly in dj_dataset
 
 # Output directories
 TRAIN_DIR = os.path.join(DATASET_ROOT, "train")
@@ -88,7 +88,8 @@ def prepare_dataset_structure():
         TRAIN_DIR, VAL_DIR,
         os.path.join(TRAIN_DIR, "images"),
         os.path.join(VAL_DIR, "images"),
-        OUTPUT_DIR, LOG_DIR
+        OUTPUT_DIR, LOG_DIR,
+        IMAGES_DIR  # Add images directory to be created
     ]
     
     for directory in directories:
@@ -118,7 +119,7 @@ def verify_and_fix_image_dimensions(coco_data, images_dir):
                     fixed_count += 1
             else:
                 print(f"Warning: Could not read image {img_path}")
-        else:
+        else: # The else statement was incorrectly indented
             print(f"Warning: Image not found {img_path}")
     
     print(f"Fixed dimensions for {fixed_count} images")
@@ -752,7 +753,7 @@ def run_inference(image_path, confidence_threshold=0.5):
     plt.axis('off')
     plt.title(f"Predictions (confidence >= {confidence_threshold})")
     plt.show()
-    
+
     # Print predictions
     instances = outputs["instances"].to("cpu")
     print("\nDetections:")
