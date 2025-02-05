@@ -4,7 +4,6 @@ ocr_models/*
 
 # Virtual Environment
 .venv/
-venv/
 ENV/
 
 # Python-related files
@@ -28,6 +27,9 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+
+# Jupyter Notebook
+.ipynb_checkpoints
 
 # IDEs and editors
 .idea/
@@ -71,3 +73,28 @@ abenathi_object_detection_dataset/
 dj_object_detection_dataset/
 merged_object_detection_dataset/
 backup_scripts/
+
+# Model files and datasets
+*.pth
+*.h5
+*.hdf5
+*.pkl
+*.model
+model_output/
+logs/
+tensorboard_logs/
+runs/
+
+# Dataset
+images/
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.tif
+*.tiff
+
+# Misc
+.DS_Store
+.env.local
+.env.*.local
