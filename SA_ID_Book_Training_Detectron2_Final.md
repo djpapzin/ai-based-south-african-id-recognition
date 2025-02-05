@@ -1,8 +1,26 @@
 # South African ID Book Detection Training with Detectron2 (Colab Version)
 
-## 1. Install Dependencies
+## 1. Mount Google Drive and Install Dependencies
 
-```python
+# Mount Google Drive
+from google.colab import drive
+drive.mount('/content/drive')
+
+# Verify the dataset directory exists
+import os
+print("\nVerifying paths...")
+DRIVE_ROOT = "/content/drive/MyDrive/Kwantu/Machine Learning"
+DATASET_ROOT = os.path.join(DRIVE_ROOT, "dj_dataset")
+
+if os.path.exists(DATASET_ROOT):
+    print(f"✓ Found dataset directory: {DATASET_ROOT}")
+    print("Contents:")
+    for item in os.listdir(DATASET_ROOT):
+        print(f"  - {item}")
+else:
+    print(f"✗ Dataset directory not found: {DATASET_ROOT}")
+
+# Install required packages
 import subprocess
 import sys
 
@@ -23,7 +41,6 @@ packages = [
 for package in packages:
     run_pip_install(package)
 print("\nAll dependencies installed successfully!")
-```
 
 ## 2. Import Libraries and Setup Environment
 
@@ -131,13 +148,23 @@ def process_label_studio_export():
     
     # Verify Label Studio export exists
     if not os.path.exists(LABEL_STUDIO_EXPORT):
+        print(f"\nChecking directory contents:")
+        print(f"DATASET_ROOT: {DATASET_ROOT}")
+        if os.path.exists(DATASET_ROOT):
+            print("Files in dataset directory:")
+            for item in os.listdir(DATASET_ROOT):
+                print(f"  - {item}")
+        else:
+            print("Dataset directory does not exist!")
         raise FileNotFoundError(f"Label Studio export not found at: {LABEL_STUDIO_EXPORT}")
+    
+    print(f"Found Label Studio export at: {LABEL_STUDIO_EXPORT}")
     
     # Read Label Studio export
     with open(LABEL_STUDIO_EXPORT, 'r') as f:
         coco_data = json.load(f)
     
-    print(f"Found COCO format export file")
+    print(f"Successfully loaded COCO format export file")
     print(f"Images: {len(coco_data['images'])}")
     print(f"Categories: {len(coco_data['categories'])}")
     print(f"Annotations: {len(coco_data['annotations'])}")
