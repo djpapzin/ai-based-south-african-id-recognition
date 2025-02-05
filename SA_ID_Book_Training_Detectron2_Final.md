@@ -189,7 +189,7 @@ def process_label_studio_export():
             if os.path.exists(src):
                 shutil.copy2(src, dst)
                 copied_count += 1
-            else:
+        else:
                 print(f"Warning: Could not find image {img_file}")
         
         print(f"✓ Copied {copied_count}/{len(split_filenames)} images for {split_name}")
@@ -735,7 +735,7 @@ except RuntimeError as e:
         print("2. Run all cells from the beginning")
         print("3. If the error persists, try reducing the batch size to 1")
     raise
-
+    
 ## 6. Save and Export Model
 
 # Save final model
@@ -774,11 +774,27 @@ print(f"- Nationality: {57.21:.2f}% AP")
 
 ## 7. Run Inference
 
+# Mount Google Drive
+from google.colab import drive
+drive.mount('/content/drive')
+
+# Install dependencies
+!pip install torch torchvision
+!pip install 'git+https://github.com/facebookresearch/detectron2.git'
+
+# Required imports
+import os
+import cv2
+import torch
+import random
+import json
+from datetime import datetime
+from detectron2.config import get_cfg
 from detectron2.engine import DefaultPredictor
 from detectron2.utils.visualizer import Visualizer
-from detectron2.data import MetadataCatalog
-import cv2
-from google.colab.patches import cv2_imshow  # Import cv2_imshow for Colab
+from detectron2.data import MetadataCatalog, DatasetCatalog
+from detectron2.model_zoo import model_zoo
+from google.colab.patches import cv2_imshow
 
 # Register dataset metadata
 thing_classes = [
@@ -795,13 +811,19 @@ if "sa_id_val" not in MetadataCatalog:
 def run_inference(image_path, confidence_threshold=0.5, cfg=None):
     """Run inference on a single image"""
     if cfg is None:
-        # Setup configuration
         cfg = get_cfg()
         cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
         cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(thing_classes)
         cfg.MODEL.DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-        cfg.MODEL.WEIGHTS = "/content/drive/MyDrive/Kwantu/Machine Learning/model_output/model_final.pth"  # Update path
+        cfg.MODEL.WEIGHTS = "/content/drive/MyDrive/Kwantu/Machine Learning/model_output/model_final.pth"
         cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
+        
+        predictor = DefaultPredictor(cfg)
+        predictor.model.load_state_dict(
+            torch.load(cfg.MODEL.WEIGHTS, 
+                      map_location=cfg.MODEL.DEVICE,
+                      weights_only=True)
+        )
 
     print(f"\nRunning inference on {cfg.MODEL.DEVICE.upper()}")
     predictor = DefaultPredictor(cfg)
@@ -823,6 +845,21 @@ def run_inference(image_path, confidence_threshold=0.5, cfg=None):
     
     # Display result
     cv2_imshow(out.get_image()[:, :, ::-1])
+    
+    # Print predictions
+    instances = outputs["instances"].to("cpu")
+    print("\nDetections:")
+    for i in range(len(instances)):
+        score = instances.scores[i].item()
+        label = instances.pred_classes[i].item()
+        class_name = MetadataCatalog.get("sa_id_val").thing_classes[label]
+        box = instances.pred_boxes[i].tensor[0].tolist()
+        print(f"- {class_name}: {score:.2%} confidence")
+        print(f"  Box: [{int(box[0])}, {int(box[1])}, {int(box[2])}, {int(box[3])}]")
+    
+    if cfg.MODEL.DEVICE == 'cuda':
+        print(f"\nGPU Memory Used: {torch.cuda.memory_allocated()/1e9:.2f} GB")
+        print(f"CUDA Device: {torch.cuda.get_device_name(0)}")
     
     return outputs
 
@@ -886,12 +923,19 @@ def save_labeled_segments(image_path, outputs, save_dir):
     print(f"Saved {len(instances)} segments from {os.path.basename(image_path)}")
     print(f"Output directory: {image_dir}")
 
-def batch_inference(image_dir, confidence_threshold=0.5, max_images=5, save_dir=None):
+def batch_inference(image_dir, confidence_threshold=0.5, max_images=None, save_dir=None):
     """Run inference on multiple images"""
     # Get and sample image files
     image_files = [f for f in os.listdir(image_dir) 
                   if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-    selected_files = random.sample(image_files, min(max_images, len(image_files)))
+    
+    # If max_images is specified, randomly sample images
+    if max_images is not None:
+        selected_files = random.sample(image_files, min(max_images, len(image_files)))
+    else:
+        selected_files = image_files
+    
+    print(f"Found {len(image_files)} images, processing {len(selected_files)}")
     
     # Create save directory if specified
     if save_dir:
@@ -903,7 +947,7 @@ def batch_inference(image_dir, confidence_threshold=0.5, max_images=5, save_dir=
     cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
     cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(thing_classes)
     cfg.MODEL.DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-    cfg.MODEL.WEIGHTS = "/content/drive/MyDrive/Kwantu/Machine Learning/model_output/model_final.pth"  # Update path
+    cfg.MODEL.WEIGHTS = "/content/drive/MyDrive/Kwantu/Machine Learning/model_output/model_final.pth"
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
     
     for image_file in selected_files:
@@ -914,15 +958,32 @@ def batch_inference(image_dir, confidence_threshold=0.5, max_images=5, save_dir=
         if save_dir:
             save_labeled_segments(image_path, outputs, save_dir)
 
-# Example usage:
-# Single image inference
-# run_inference("/path/to/your/image.jpg", confidence_threshold=0.5)
-
-# Batch inference with saving segments
-# batch_inference("/path/to/image/directory", 
-#                confidence_threshold=0.5,
-#                max_images=5,
-#                save_dir="/path/to/save/segments")
+# Example usage - will run when cell is executed
+if __name__ == "__main__":
+    # Full paths to directories
+    EXAMPLE_IDS_DIR = "/content/drive/MyDrive/Kwantu/Machine Learning/dj_dataset/example_ids"
+    VAL_DIR = "/content/drive/MyDrive/Kwantu/Machine Learning/dj_dataset/val"
+    SAVE_DIR = "/content/drive/MyDrive/Kwantu/Machine Learning/dj_dataset/detected_segments"
+    
+    # Process example IDs
+    print("\nRunning batch inference on example IDs...")
+    if os.path.exists(EXAMPLE_IDS_DIR):
+        batch_inference(EXAMPLE_IDS_DIR, 
+                       confidence_threshold=0.5,
+                       max_images=None,  # Process all images
+                       save_dir=os.path.join(SAVE_DIR, "examples"))
+    else:
+        print(f"Warning: Example IDs directory not found at {EXAMPLE_IDS_DIR}")
+    
+    # Process validation images
+    print("\nRunning batch inference on validation images...")
+    if os.path.exists(VAL_DIR):
+        batch_inference(VAL_DIR,
+                       confidence_threshold=0.5,
+                       max_images=None,  # Process all images
+                       save_dir=os.path.join(SAVE_DIR, "validation"))
+    else:
+        print(f"Warning: Validation directory not found at {VAL_DIR}")
 
 ## 8. OCR Processing with Tesseract
 
@@ -960,7 +1021,7 @@ def process_segments_with_ocr(segments_dir, output_json):
         # Read image with PIL
         image_path = os.path.join(segments_dir, filename)
         try:
-            # Read image
+    # Read image
             image = Image.open(image_path)
             
             # Configure OCR settings based on field type
@@ -1007,12 +1068,6 @@ val_segments_dir = os.path.join("dj_dataset", "detected_segments", "validation")
 val_output_json = os.path.join("dj_dataset", "ocr_results", "validation_results.json")
 val_results = process_segments_with_ocr(val_segments_dir, val_output_json)
 
-# Process example segments
-print("\nProcessing example segments with OCR...")
-example_segments_dir = os.path.join("dj_dataset", "detected_segments", "examples")
-example_output_json = os.path.join("dj_dataset", "ocr_results", "example_results.json")
-example_results = process_segments_with_ocr(example_segments_dir, example_output_json)
-
 # Display sample results
 print("\nSample OCR Results:")
 for image_id, data in list(val_results.items())[:2]:  # Show first 2 images
@@ -1054,8 +1109,15 @@ def run_inference(image_path, confidence_threshold=0.5, cfg=None):
         cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
         cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(thing_classes)
         cfg.MODEL.DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-        cfg.MODEL.WEIGHTS = "/content/drive/MyDrive/Kwantu/Machine Learning/model_output/model_final.pth"  # Update path
+        cfg.MODEL.WEIGHTS = "/content/drive/MyDrive/Kwantu/Machine Learning/model_output/model_final.pth"
         cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
+        
+        predictor = DefaultPredictor(cfg)
+        predictor.model.load_state_dict(
+            torch.load(cfg.MODEL.WEIGHTS, 
+                      map_location=cfg.MODEL.DEVICE,
+                      weights_only=True)
+        )
 
     print(f"\nRunning inference on {cfg.MODEL.DEVICE.upper()}")
     predictor = DefaultPredictor(cfg)
@@ -1078,22 +1140,129 @@ def run_inference(image_path, confidence_threshold=0.5, cfg=None):
     # Display result
     cv2_imshow(out.get_image()[:, :, ::-1])
     
+    # Print predictions
+    instances = outputs["instances"].to("cpu")
+    print("\nDetections:")
+    for i in range(len(instances)):
+        score = instances.scores[i].item()
+        label = instances.pred_classes[i].item()
+        class_name = MetadataCatalog.get("sa_id_val").thing_classes[label]
+        box = instances.pred_boxes[i].tensor[0].tolist()
+        print(f"- {class_name}: {score:.2%} confidence")
+        print(f"  Box: [{int(box[0])}, {int(box[1])}, {int(box[2])}, {int(box[3])}]")
+    
+    if cfg.MODEL.DEVICE == 'cuda':
+        print(f"\nGPU Memory Used: {torch.cuda.memory_allocated()/1e9:.2f} GB")
+        print(f"CUDA Device: {torch.cuda.get_device_name(0)}")
+    
     return outputs
 
-# Rest of the functions remain the same...
-[previous save_labeled_segments and batch_inference functions]
+def save_labeled_segments(image_path, outputs, save_dir):
+    """Save detected segments with their labels"""
+    # Read image
+    image = cv2.imread(image_path)
+    if image is None:
+        print(f"Could not read image: {image_path}")
+        return
+    
+    # Create directory for this image
+    base_name = os.path.splitext(os.path.basename(image_path))[0]
+    image_dir = os.path.join(save_dir, base_name)
+    os.makedirs(image_dir, exist_ok=True)
+    
+    # Get instances and metadata
+    instances = outputs["instances"].to("cpu")
+    metadata = MetadataCatalog.get("sa_id_val")
+    field_counts = {}
+    
+    # Process detections
+    for i in range(len(instances)):
+        box = instances.pred_boxes[i].tensor[0].numpy().astype(int)
+        label = instances.pred_classes[i].item()
+        score = instances.scores[i].item()
+        class_name = metadata.thing_classes[label]
+        
+        # Handle duplicate fields
+        if class_name in field_counts:
+            field_counts[class_name] += 1
+            filename = f"{class_name}_{field_counts[class_name]}.jpg"
+        else:
+            field_counts[class_name] = 1
+            filename = f"{class_name}.jpg"
+        
+        # Extract and save segment
+        x1, y1, x2, y2 = box
+        padding = 5
+        x1, y1 = max(0, x1 - padding), max(0, y1 - padding)
+        x2, y2 = min(image.shape[1], x2 + padding), min(image.shape[0], y2 + padding)
+        segment = image[y1:y2, x1:x2]
+        cv2.imwrite(os.path.join(image_dir, filename), segment)
+    
+    # Save metadata
+    metadata_dict = {
+        "timestamp": datetime.now().isoformat(),
+        "detections": {
+            f"{class_name}{'_'+str(field_counts[class_name]) if field_counts[class_name]>1 else ''}.jpg": {
+                "class": class_name,
+                "confidence": float(score),
+                "bbox": [int(x) for x in instances.pred_boxes[i].tensor[0].tolist()]
+            }
+            for i, class_name in enumerate([metadata.thing_classes[label] for label in instances.pred_classes])
+        }
+    }
+    
+    with open(os.path.join(image_dir, "detection_metadata.json"), 'w') as f:
+        json.dump(metadata_dict, f, indent=2)
+    
+    print(f"Saved {len(instances)} segments from {os.path.basename(image_path)}")
+    print(f"Output directory: {image_dir}")
+
+def batch_inference(image_dir, confidence_threshold=0.5, max_images=None, save_dir=None):
+    """Run inference on multiple images"""
+    # Get and sample image files
+    image_files = [f for f in os.listdir(image_dir) 
+                  if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+    
+    # If max_images is specified, randomly sample images
+    if max_images is not None:
+        selected_files = random.sample(image_files, min(max_images, len(image_files)))
+    else:
+        selected_files = image_files
+    
+    print(f"Found {len(image_files)} images, processing {len(selected_files)}")
+    
+    # Create save directory if specified
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+        print(f"\nSaving labeled segments to: {save_dir}")
+    
+    # Setup configuration once
+    cfg = get_cfg()
+    cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(thing_classes)
+    cfg.MODEL.DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+    cfg.MODEL.WEIGHTS = "/content/drive/MyDrive/Kwantu/Machine Learning/model_output/model_final.pth"
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
+    
+    for image_file in selected_files:
+        print(f"\nProcessing: {image_file}")
+        image_path = os.path.join(image_dir, image_file)
+        outputs = run_inference(image_path, confidence_threshold, cfg)
+        
+        if save_dir:
+            save_labeled_segments(image_path, outputs, save_dir)
 
 # Example usage:
 if __name__ == "__main__":
     # Paths
     DRIVE_ROOT = "/content/drive/MyDrive/Kwantu/Machine Learning"
     DATASET_ROOT = os.path.join(DRIVE_ROOT, "dj_dataset")
-    EXAMPLE_IDS_DIR = os.path.join(DATASET_ROOT, "example_ids")
+    VAL_DIR = os.path.join(DATASET_ROOT, "val")
     SAVE_DIR = os.path.join(DATASET_ROOT, "detected_segments")
     
-    # Run inference on example IDs
-    print("\nRunning batch inference on example IDs...")
-    batch_inference(EXAMPLE_IDS_DIR, 
+    # Run inference on validation images
+    print("\nRunning batch inference on validation images...")
+    batch_inference(VAL_DIR, 
                    confidence_threshold=0.5,
-                   max_images=5,
-                   save_dir=os.path.join(SAVE_DIR, "examples"))
+                   max_images=None,  # Process all images
+                   save_dir=os.path.join(SAVE_DIR, "validation"))

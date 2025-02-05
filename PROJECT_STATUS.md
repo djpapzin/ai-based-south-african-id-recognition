@@ -1,39 +1,51 @@
 # South African ID Document Detection - Project Status
 
-## Latest Update: February 5, 2025
+## Latest Update: February 5, 2024
 
 ### Current Status
-Project Status: SA ID Recognition
+✅ Training Complete
+✅ Inference Pipeline Ready
 
 ### Implementation Progress
-- ✅ Dataset preparation complete with train/val splits
-- ✅ Detectron2 model configuration set up with Faster R-CNN (ResNet50-FPN backbone)
-- ✅ Training script optimized for quick demo (500 iterations)
-- ✅ GPU acceleration enabled by default
-- ✅ Category ID handling and validation implemented
-- ✅ Bounding box validation checks added
+- ✅ Dataset preparation complete (52 train/14 val)
+- ✅ Model training completed (500 iterations)
+- ✅ Inference pipeline implemented
+- ✅ Segment saving functionality added
+- ✅ GPU acceleration optimized
 
 ### Technical Details
 - Model: Faster R-CNN with ResNet50-FPN backbone
-- Dataset: 35 valid images with 1003 instances across 12 categories
 - Training Parameters:
-  - Batch Size: 4 (optimized for quick demo)
-  - Learning Rate: 0.001
-  - Max Iterations: 500
-  - Evaluation Period: 100 iterations
-  - Checkpoint Period: 100 iterations
+  * Batch Size: 8
+  * Learning Rate: 0.001
+  * Iterations: 500
+  * Device: GPU
 
-### Known Issues
-- Category IDs in annotations do not start from 1 (handled by Detectron2's automatic mapping)
-- Initial CUDA errors being addressed with proper validation checks
+### Performance Metrics
+- Average Precision:
+  * AP (IoU=0.50:0.95): 52.30%
+  * AP50 (IoU=0.50): 89.64%
+  * AP75 (IoU=0.75): 53.40%
+
+- Per-Category Performance:
+  * ID Document: 81.81% AP
+  * Face: 66.25% AP
+  * Nationality: 58.93% AP
+  * Names: 51.06% AP
+  * Citizenship Status: 49.35% AP
+  * Date of Birth: 47.04% AP
+  * ID Number: 46.41% AP
+  * Surname: 45.56% AP
+  * Sex: 43.11% AP
+  * Signature: 44.91% AP
 
 ### Next Steps
-1. Complete quick demo training
-2. Evaluate model performance
-3. Fine-tune hyperparameters if needed
-4. Plan for longer training session with increased iterations
-5. Implement inference pipeline
-6. Document model performance metrics
+1. ✅ Complete training
+2. ✅ Implement inference pipeline
+3. ✅ Add segment saving
+4. 🔄 Optimize performance
+5. 🔄 Enhance OCR integration
+6. 🔄 Create user interface
 
 ### Recent Updates
 - Optimized training configuration for quick demo (10-15 minutes)

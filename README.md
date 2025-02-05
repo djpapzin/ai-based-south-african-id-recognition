@@ -1,181 +1,135 @@
 # South African ID Card Information Extraction
 
-A comprehensive solution for extracting and processing information from South African ID cards using Object Detection and OCR approaches.
+A comprehensive solution for extracting and processing information from South African ID cards using Detectron2 for object detection.
 
 ## Current Status (February 5, 2024)
 
+### Model Performance
+- Average Precision:
+  * AP (IoU=0.50:0.95): 52.30%
+  * AP50 (IoU=0.50): 89.64%
+  * AP75 (IoU=0.75): 53.40%
+
+### Best Performing Categories
+- ID Document: 81.81% AP
+- Face: 66.25% AP
+- Nationality: 58.93% AP
+- Names: 51.06% AP
+- Citizenship Status: 49.35% AP
+
 ### Dataset
-- Total Images: 66 images
+- Total Images: 66
   * Training Set: 52 images
   * Validation Set: 14 images
-- Image Format: Variable size, maintaining aspect ratio
-- Annotation Format: COCO JSON
-- Categories: 11 fields
+- Format: Variable size, preserving aspect ratio
+- Annotations: COCO JSON format
+- Categories: 15 fields
 
-### Project Components
+### Components
 
-#### 1. Object Detection Model (Current Focus)
-- Detectron2-based Faster R-CNN model for detecting:
-  * Document Fields (11 categories):
-    - id_document
-    - surname
-    - names
-    - sex
-    - nationality
-    - id_number
-    - date_of_birth
-    - country_of_birth
-    - citizenship_status
-    - face
-    - signature
+#### 1. Object Detection (Completed)
+- Model: Detectron2 Faster R-CNN
+- Backbone: ResNet50-FPN
+- Training:
+  * Batch Size: 8
+  * Learning Rate: 0.001
+  * Iterations: 500
+  * Device: GPU
 
-#### 2. OCR Processing (Planned)
-- Multiple OCR engine support:
-  - Tesseract OCR
-  - EasyOCR
-  - PaddleOCR
+#### 2. Inference Pipeline (Completed)
 - Features:
-  - Handles both images (.jpg, .jpeg, .png)
-  - Automatic preprocessing
-  - Region of Interest (ROI) extraction
-  - Parallel processing
-  - Comprehensive preprocessing pipeline
-
-### Model Configuration
-- Architecture: Faster R-CNN with ResNet50-FPN backbone
-- Input Processing:
-  - Min size train: 800
-  - Max size train/test: 1333
-  - Aspect ratio preserved
-- Training Parameters:
-  - Batch size: 2 (GPU)
-  - Base learning rate: 0.00025
-  - Learning rate decay: Steps at 3000, 4000 iterations
-  - Total iterations: 5000
-  - Evaluation period: 1000 iterations
-- ROI Heads:
-  - Batch size per image: 128
-  - Score threshold: 0.5
-  - 11 classes (fields)
+  * GPU acceleration
+  * Batch processing
+  * Segment saving
+  * Confidence thresholding
+  * Metadata export
 
 ## Setup Instructions
 
 ### Prerequisites
 1. Python 3.7+
-2. CUDA-capable GPU (for training)
-3. Required packages in requirements.txt
+2. CUDA-capable GPU (recommended)
+3. Google Drive (for model storage)
 
-### Installation
-
-1. Create and activate a virtual environment:
-```bash
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-.venv\Scripts\activate     # Windows
+### Quick Start
+1. Mount Google Drive:
+```python
+from google.colab import drive
+drive.mount('/content/drive')
 ```
 
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
+2. Install Dependencies:
+```python
+!pip install 'git+https://github.com/facebookresearch/detectron2.git'
 ```
 
-## Dataset Structure
+3. Run Inference:
+```python
+# Single image
+run_inference("/path/to/image.jpg", confidence_threshold=0.5)
 
+# Batch processing
+batch_inference(
+    image_dir="/path/to/images",
+    confidence_threshold=0.5,
+    max_images=None,  # Process all images
+    save_dir="/path/to/save/segments"
+)
 ```
-train_val_dataset/
-├── train/
-│   ├── annotations.json (52 images)
-│   └── images/
-└── val/
-    ├── annotations.json (14 images)
-    └── images/
+
+## Directory Structure
+```
+project/
+├── detected_segments/
+│   └── image_name/
+│       ├── face.jpg
+│       ├── id_number.jpg
+│       ├── signature.jpg
+│       └── detection_metadata.json
+├── model_output/
+│   ├── model_final.pth
+│   ├── model_cfg.yaml
+│   └── metadata.json
+└── dj_dataset/
+    ├── train/
+    │   ├── annotations.json
+    │   └── images/
+    └── val/
+        ├── annotations.json
+        └── images/
 ```
 
-## Training Process
+## Features
 
-### 1. Data Preparation (Completed)
-- Dataset prepared and split
-- Images standardized with aspect ratio
-- Annotations in COCO format
-- Field categories finalized
+### 1. Field Detection
+- 15 field categories including:
+  * ID Document
+  * Face
+  * Signature
+  * Personal Information Fields
 
-### 2. Model Training (In Progress)
-- Using Google Colab with GPU runtime
-- Base Model: Faster R-CNN with ResNet50-FPN
-- Input Size: Variable with max 1333px
-- Output: Field bounding boxes
+### 2. Output Generation
+- Segmented field images
+- JSON metadata with:
+  * Confidence scores
+  * Bounding boxes
+  * Field classifications
 
-### 3. Evaluation
-- Metrics to track:
-  * AP (Average Precision)
-  * AP50 (AP at IoU=0.50)
-  * AP75 (AP at IoU=0.75)
-  * Per-category performance
-  * Processing time
-
-## Pipeline Components
-
-### 1. Document Processing
-- Image preprocessing
-- Size normalization
-- Format standardization
-
-### 2. Field Detection
-- Document boundary detection
-- Field localization
-- Text region detection
-
-### 3. Text Extraction
-- ROI extraction
-- OCR processing
-- Text validation
-
-### 4. Output Generation
-- JSON format
-- Confidence scores
-- Extracted field values
-
-## Current Progress
-
-✓ Dataset preparation completed
-✓ Training infrastructure setup
-✓ Model configuration optimized
-→ Training in progress
-→ Evaluation pipeline ready
+### 3. Processing Options
+- Single image processing
+- Batch processing
+- Random sampling
+- Confidence thresholding
 
 ## Next Steps
-
-1. Model Training
-   - Complete initial training
-   - Monitor performance metrics
-   - Evaluate field detection
-   - Fine-tune if needed
-
-2. Pipeline Development
-   - Implement inference pipeline
-   - Add field detection
-   - Integrate OCR processing
-   - Create demo interface
-
-## Performance Requirements
-
-- Field Detection Accuracy: 90%+
-- Processing Time: <10 seconds
-- Output: Structured JSON with confidence scores
-
-## Notes
-
-- Dataset properly organized and validated
-- Training infrastructure working correctly
-- Initial training showing promising results
-- Ready for completion of training phase
+1. 🔄 Optimize performance
+2. 🔄 Enhance OCR integration
+3. 🔄 Create user interface
 
 ## License
-
 [Your License]
 
 ## Contributors
-
 [Your Name/Organization]
 
 ## Project Components
