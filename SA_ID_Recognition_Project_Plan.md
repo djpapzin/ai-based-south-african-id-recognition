@@ -1,61 +1,55 @@
 # South African ID Recognition Project Plan
 
 ## Project Overview
-An automated system for detecting and extracting information from South African ID documents using computer vision and OCR technologies.
+Implementing an AI-based South African ID document recognition system using Detectron2 for field detection.
 
 ## Project Status Overview
 
 ### Completed Tasks:
-1. Dataset Preparation ✓
+1. Dataset Preparation 
    - Refined dataset to 66 high-quality images
    - Split into 52 training and 14 validation images
    - Standardized annotations
    - Preserved image aspect ratios
    - Unified category system
 
-2. Model Architecture ✓
+2. Model Architecture 
    - Selected Faster R-CNN architecture
    - Configured ResNet50-FPN backbone
    - Implemented evaluation hooks
    - Set up TensorBoard logging
 
-3. Training Configuration ✓
+3. Training Configuration 
    - Optimized batch sizes for GPU
    - Configured learning rate schedule
    - Set up evaluation metrics
    - Prepared validation pipeline
 
+4. Dataset preparation and splitting 
+5. Model configuration setup 
+6. Training script development 
+7. GPU acceleration implementation 
+8. Data validation checks 
+
 ### Current Phase:
 1. Model Training
-   - Faster R-CNN implementation
-   - Field detection training
-   - Performance monitoring
-   - Regular evaluation
+   - Model: Faster R-CNN with ResNet50-FPN backbone
+   - Status: Initial training configuration complete
+   - Focus: Quick demo implementation (10-15 minutes training)
 
 2. Technical Setup
-   - Batch size: 2 (GPU)
-   - Learning rate: 0.00025
-   - 5000 iterations
-   - 1000 iteration evaluation period
+   - Batch size: 4 (GPU)
+   - Learning rate: 0.001
+   - 500 iterations
+   - 100 iteration evaluation period
 
 ### Next Steps:
-1. Training & Evaluation
-   - Complete initial training
-   - Monitor performance metrics
-   - Evaluate field detection
-   - Fine-tune parameters
-
-2. Pipeline Development
-   - Implement inference pipeline
-   - Enhance field detection
-   - Add OCR processing
-   - Create demo interface
-
-3. Documentation & Deployment
-   - Update technical documentation
-   - Create usage guidelines
-   - Prepare deployment package
-   - Set up monitoring
+1. Complete demo training run
+2. Evaluate initial model performance
+3. Plan full training with increased iterations
+4. Develop inference pipeline
+5. Add OCR integration
+6. Create demo interface
 
 ## Timeline
 1. February 2024
@@ -116,6 +110,45 @@ train_val_dataset/
 - Field Detection: High precision
 - Processing Time: <10 seconds total
 - Output: Structured JSON with confidence scores
+
+## Technical Specifications
+
+### Current Training Configuration (Quick Demo)
+- Batch Size: 4
+- Learning Rate: 0.001
+- Max Iterations: 500
+- Evaluation Period: 100
+- GPU Acceleration: Enabled
+
+### Planned Full Training Configuration
+- Batch Size: 2
+- Learning Rate: 0.00025
+- Max Iterations: 5000
+- ROI Batch Size: 128
+- Score Threshold: 0.5
+
+## Known Issues & Solutions
+1. Category ID Mapping
+   - Issue: IDs don't start from 1
+   - Solution: Using Detectron2's automatic mapping
+
+2. CUDA Memory Management
+   - Issue: Initial CUDA errors
+   - Solution: Implemented validation checks and proper memory handling
+
+## Project Dependencies
+- Python 3.x
+- PyTorch
+- Detectron2
+- OpenCV
+- CUDA (for GPU acceleration)
+
+## Documentation Status
+- Project setup documentation
+- Training configuration guide
+- Model evaluation metrics (pending)
+- Inference pipeline documentation (planned)
+- User interface guide (planned)
 
 ## Notes
 - Dataset is properly organized and validated
