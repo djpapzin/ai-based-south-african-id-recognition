@@ -696,4 +696,97 @@ trainer.train()
 
 ## 6. Save and Export Model
 
+```python
+# Save final model
+print("\nSaving final model...")
+final_model_path = os.path.join(OUTPUT_DIR, "model_final.pth")
+print(f"Saving model to: {final_model_path}")
+
+# Create a backup copy in Google Drive
+drive_backup_path = os.path.join(DRIVE_ROOT, "model_backup", "model_final.pth")
+os.makedirs(os.path.dirname(drive_backup_path), exist_ok=True)
+shutil.copy2(final_model_path, drive_backup_path)
+print(f"Created backup in Google Drive: {drive_backup_path}")
+
+# Export model config
+cfg_path = os.path.join(OUTPUT_DIR, "model_config.yaml")
+with open(cfg_path, "w") as f:
+    f.write(cfg.dump())
+print(f"Saved model configuration to: {cfg_path}")
 ```
+
+## 7. Run Inference
+
+from detectron2.utils.visualizer import ColorMode
+import cv2
+
+def run_inference(image_path, confidence_threshold=0.5):
+    """
+    Run inference on a single image.
+    
+    Args:
+        image_path: Path to the image file
+        confidence_threshold: Detection confidence threshold (0-1)
+    """
+    # Read image
+    img = cv2.imread(image_path)
+    
+    # Create predictor
+    cfg.MODEL.WEIGHTS = os.path.join(OUTPUT_DIR, "model_final.pth")
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
+    predictor = DefaultPredictor(cfg)
+    
+    # Run inference
+    outputs = predictor(img)
+    
+    # Visualize results
+    v = Visualizer(img[:, :, ::-1],
+                  metadata=MetadataCatalog.get("sa_id_val"),
+                  instance_mode=ColorMode.IMAGE_BW)
+    
+    out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+    
+    # Display results
+    plt.figure(figsize=(15, 10))
+    plt.imshow(out.get_image()[:, :, ::-1])
+    plt.axis('off')
+    plt.title(f"Predictions (confidence >= {confidence_threshold})")
+    plt.show()
+    
+    # Print predictions
+    instances = outputs["instances"].to("cpu")
+    print("\nDetections:")
+    for i in range(len(instances)):
+        score = instances.scores[i].item()
+        label = instances.pred_classes[i].item()
+        class_name = MetadataCatalog.get("sa_id_val").thing_classes[label]
+        box = instances.pred_boxes[i].tensor[0].tolist()
+        print(f"- {class_name}: {score:.2%} confidence")
+        print(f"  Box: [{int(box[0])}, {int(box[1])}, {int(box[2])}, {int(box[3])}]")
+
+# Example usage - run on a validation image
+print("Running inference on sample validation image...")
+val_images_dir = os.path.join(VAL_DIR, "images")
+sample_image = os.path.join(val_images_dir, os.listdir(val_images_dir)[0])
+run_inference(sample_image, confidence_threshold=0.5)
+
+# Function to run inference on multiple images
+def batch_inference(image_dir, confidence_threshold=0.5, max_images=5):
+    """
+    Run inference on multiple images in a directory.
+    
+    Args:
+        image_dir: Directory containing images
+        confidence_threshold: Detection confidence threshold (0-1)
+        max_images: Maximum number of images to process
+    """
+    image_files = [f for f in os.listdir(image_dir) 
+                  if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+    
+    for image_file in image_files[:max_images]:
+        print(f"\nProcessing: {image_file}")
+        image_path = os.path.join(image_dir, image_file)
+        run_inference(image_path, confidence_threshold)
+
+print("\nRunning batch inference on validation set...")
+batch_inference(val_images_dir, confidence_threshold=0.5, max_images=3)
