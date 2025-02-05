@@ -20,85 +20,6 @@ drive.mount('/content/drive')
 print("\nVerifying paths...")
 DRIVE_ROOT = "/content/drive/MyDrive/Kwantu/Machine Learning"
 DATASET_ROOT = os.path.join(DRIVE_ROOT, "dj_dataset")
-
-if os.path.exists(DATASET_ROOT):
-    print(f"✓ Found dataset directory: {DATASET_ROOT}")
-    print("Contents:")
-    for item in os.listdir(DATASET_ROOT):
-        print(f"  - {item}")
-else:
-    print(f"✗ Dataset directory not found: {DATASET_ROOT}")
-
-# Install required packages
-import subprocess
-import sys
-
-def run_pip_install(package):
-    print(f"\nInstalling {package}...")
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', package])
-    print(f"Successfully installed {package}")
-
-# Install required packages
-print("Starting dependency installation...")
-packages = [
-    'torch',
-    'torchvision',
-    'scikit-learn',  # Added for train/val split
-    'git+https://github.com/facebookresearch/detectron2.git'
-]
-
-for package in packages:
-    run_pip_install(package)
-print("\nAll dependencies installed successfully!")
-
-## 2. Import Libraries and Setup Environment
-
-```python
-print("Importing required libraries...")
-
-import os
-import cv2
-import json
-import random
-import numpy as np
-import torch
-from pathlib import Path
-import matplotlib.pyplot as plt
-import logging
-from collections import OrderedDict
-import shutil
-from sklearn.model_selection import train_test_split
-
-from detectron2.utils.logger import setup_logger
-from detectron2.data.datasets import register_coco_instances
-from detectron2.data import DatasetCatalog, MetadataCatalog
-from detectron2.engine import DefaultTrainer
-from detectron2.config import get_cfg
-from detectron2.model_zoo import model_zoo
-from detectron2.evaluation import COCOEvaluator
-from detectron2.utils.visualizer import Visualizer
-from detectron2.modeling import GeneralizedRCNNWithTTA
-from detectron2.engine import hooks
-
-# Setup logger
-setup_logger()
-
-# Print environment information
-print("\nEnvironment Information:")
-print(f"PyTorch version: {torch.__version__}")
-print(f"CUDA available: {torch.cuda.is_available()}")
-if torch.cuda.is_available():
-    print(f"CUDA device: {torch.cuda.get_device_name(0)}")
-print(f"OpenCV version: {cv2.__version__}")
-print("\nAll libraries imported successfully!")
-```
-
-## 3. Setup Project Directory and Prepare Dataset
-
-```python
-# Set project directory paths for Colab
-DRIVE_ROOT = "/content/drive/MyDrive/Kwantu/Machine Learning"
-DATASET_ROOT = os.path.join(DRIVE_ROOT, "dj_dataset")
 LABEL_STUDIO_EXPORT = os.path.join(DATASET_ROOT, "result.json")  # result.json is directly in dj_dataset
 IMAGES_DIR = os.path.join(DATASET_ROOT, "images")  # images folder is directly in dj_dataset
 
@@ -107,7 +28,7 @@ TRAIN_DIR = os.path.join(DATASET_ROOT, "train")
 VAL_DIR = os.path.join(DATASET_ROOT, "val")
 OUTPUT_DIR = os.path.join(DRIVE_ROOT, "model_output")
 LOG_DIR = os.path.join(OUTPUT_DIR, "logs")
-
+    
 def prepare_dataset_structure():
     """Create necessary directories for the dataset."""
     directories = [
@@ -268,7 +189,7 @@ def process_label_studio_export():
             if os.path.exists(src):
                 shutil.copy2(src, dst)
                 copied_count += 1
-            else:
+        else:
                 print(f"Warning: Could not find image {img_file}")
         
         print(f"✓ Copied {copied_count}/{len(split_filenames)} images for {split_name}")
@@ -347,11 +268,9 @@ def inspect_annotations():
 # Add this after loading the data
 print("\nInspecting annotation structure...")
 inspect_annotations()
-```
 
 ## 4. Register and Verify Dataset
 
-```python
 import os
 import json
 import numpy as np
@@ -627,11 +546,37 @@ register_datasets()
 # Visualize some samples
 print("\nVisualizing training samples:")
 visualize_samples("sa_id_train")
-```
+
+# Comprehensive Data Validation
+print('\n=== Data Integrity Checks ===')
+
+# 1. Verify category consistency
+max_category = max([k['category_id'] for d in DatasetCatalog.get("sa_id_train") for k in d['annotations']])
+print(f'Max category ID: {max_category} (should be {len(MetadataCatalog.get("sa_id_train").thing_classes)-1})')
+
+# 2. Check image file existence
+for d in DatasetCatalog.get("sa_id_train"):
+    if not os.path.exists(d['file_name']):
+        print(f'Missing image file: {d["file_name"]}')
+
+# 3. Validate bounding box formats
+for idx, d in enumerate(DatasetCatalog.get("sa_id_train")):
+    for anno in d['annotations']:
+        bbox = anno['bbox']
+        if len(bbox) != 4:
+            print(f'Invalid bbox format in image {d["image_id"]}: {bbox}')
+        if (bbox[2] - bbox[0]) <= 0 or (bbox[3] - bbox[1]) <= 0:
+            print(f'Invalid bbox dimensions in image {d["image_id"]}: {bbox}')
+
+# 4. Verify segmentation formats
+for d in DatasetCatalog.get("sa_id_train"):
+    for anno in d['annotations']:
+        if 'segmentation' in anno:
+            for seg in anno['segmentation']:
+                if len(seg) < 6 or len(seg) % 2 != 0:
+                    print(f'Invalid segmentation in image {d["image_id"]}')
 
 ## 5. Training Configuration and Model Training
-
-```python
 class CocoTrainer(DefaultTrainer):
     """Custom trainer to evaluate on validation set during training."""
     @classmethod
@@ -675,32 +620,53 @@ def setup_cfg(train_dataset_name, val_dataset_name, num_classes, output_dir):
     
     # Use Faster R-CNN configuration
     cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
+    
+    # Use COCO pre-trained weights
     cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
     
     # Dataset config
     cfg.DATASETS.TRAIN = (train_dataset_name,)
     cfg.DATASETS.TEST = (val_dataset_name,)
     
-    # Solver config
-    cfg.SOLVER.IMS_PER_BATCH = 2  # Batch size (adjust based on your GPU memory)
-    cfg.SOLVER.BASE_LR = 0.00025  # Learning rate
-    cfg.SOLVER.MAX_ITER = 5000    # Maximum iterations
-    cfg.SOLVER.STEPS = []         # Learning rate decay steps
-    cfg.SOLVER.CHECKPOINT_PERIOD = 1000  # Save checkpoint every 1000 iterations
+    # Solver parameters for quick demo
+    cfg.SOLVER.IMS_PER_BATCH = 4  # Increased batch size for faster iterations
+    cfg.SOLVER.BASE_LR = 0.001    # Slightly higher learning rate
+    cfg.SOLVER.MAX_ITER = 500     # Reduced iterations for quick training
+    cfg.SOLVER.CHECKPOINT_PERIOD = 100  # Save checkpoints more frequently
+    cfg.SOLVER.WARMUP_ITERS = 50  # Reduced warmup period
+    
+    # Evaluation settings
+    cfg.TEST.EVAL_PERIOD = 100    # Evaluate more frequently
     
     # Model config
     cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 128
-    cfg.MODEL.ROI_HEADS.NUM_CLASSES = num_classes  # Number of classes (15 in your case)
-    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5   # Testing threshold
+    metadata = MetadataCatalog.get(train_dataset_name)
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(metadata.thing_classes)  # Should be 12
+    print(f'\n\n=== Model Config ===')
+    print(f'Number of classes configured: {cfg.MODEL.ROI_HEADS.NUM_CLASSES}')
+    print(f'Dataset categories: {len(metadata.thing_classes)}')
+    assert cfg.MODEL.ROI_HEADS.NUM_CLASSES == len(metadata.thing_classes), "Class count mismatch!"
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5
     
-    # Input config
-    cfg.INPUT.MIN_SIZE_TRAIN = (800,)  # Images will be resized to this min size for training
+    # Initialize new layers properly
+    cfg.MODEL.ROI_HEADS.NAME = "StandardROIHeads"
+    cfg.MODEL.ROI_BOX_HEAD.NAME = "FastRCNNConvFCHead"
+    cfg.MODEL.ROI_BOX_HEAD.NUM_FC = 2
+    cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION = 7
+    
+    # Input config - keep COCO standard sizes
+    cfg.INPUT.MIN_SIZE_TRAIN = (640, 672, 704, 736, 768, 800)
     cfg.INPUT.MAX_SIZE_TRAIN = 1333
     cfg.INPUT.MIN_SIZE_TEST = 800
     cfg.INPUT.MAX_SIZE_TEST = 1333
     
+    # Enable data augmentation
+    cfg.INPUT.RANDOM_FLIP = "horizontal"
+    cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS = True
+    cfg.DATALOADER.NUM_WORKERS = 2
+    
     # Evaluation config
-    cfg.TEST.EVAL_PERIOD = 1000  # Evaluate every 1000 iterations
+    cfg.TEST.EVAL_PERIOD = 100
     
     # Output config
     cfg.OUTPUT_DIR = output_dir
@@ -710,15 +676,40 @@ def setup_cfg(train_dataset_name, val_dataset_name, num_classes, output_dir):
 
 # Configure and train model
 print("\nConfiguring model...")
+
+# Set CUDA options for debugging
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+import torch
+torch.backends.cudnn.enabled = True
+torch.backends.cudnn.benchmark = True
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+
+# Clear CUDA cache
+if torch.cuda.is_available():
+    torch.cuda.empty_cache()
+
+# Get number of categories from the dataset
+train_metadata = MetadataCatalog.get("sa_id_train")
+num_classes = len(train_metadata.thing_classes)
+
+# Remove any existing model checkpoints
+if os.path.exists(OUTPUT_DIR):
+    print("Cleaning up old checkpoints...")
+    for f in os.listdir(OUTPUT_DIR):
+        if f.endswith('.pth'):
+            os.remove(os.path.join(OUTPUT_DIR, f))
+
 cfg = setup_cfg(
     train_dataset_name="sa_id_train",
     val_dataset_name="sa_id_val",
-    num_classes=15,  # Your dataset has 15 categories
+    num_classes=num_classes,
     output_dir=OUTPUT_DIR
 )
 
 print("\nModel Configuration:")
 print(f"Number of classes: {cfg.MODEL.ROI_HEADS.NUM_CLASSES}")
+print(f"Categories: {train_metadata.thing_classes}")
 print(f"Training iterations: {cfg.SOLVER.MAX_ITER}")
 print(f"Learning rate: {cfg.SOLVER.BASE_LR}")
 print(f"Batch size: {cfg.SOLVER.IMS_PER_BATCH}")
@@ -726,14 +717,26 @@ print(f"Using device: {'GPU' if torch.cuda.is_available() else 'CPU'}")
 
 # Start training
 print("\nStarting training...")
-trainer = CocoTrainer(cfg)
-trainer.resume_or_load(resume=False)
-trainer.train()
-```
-
+try:
+    trainer = CocoTrainer(cfg)
+    trainer.resume_or_load(resume=False)
+    trainer.train()
+except RuntimeError as e:
+    if "CUDA" in str(e):
+        print("\nCUDA error encountered. Details:")
+        print(str(e))
+        print("\nTrying to recover...")
+        # Clear CUDA cache
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        print("\nPlease try the following:")
+        print("1. Restart the runtime")
+        print("2. Run all cells from the beginning")
+        print("3. If the error persists, try reducing the batch size to 1")
+    raise
+    
 ## 6. Save and Export Model
 
-```python
 # Save final model
 print("\nSaving final model...")
 final_model_path = os.path.join(OUTPUT_DIR, "model_final.pth")
@@ -750,7 +753,6 @@ cfg_path = os.path.join(OUTPUT_DIR, "model_config.yaml")
 with open(cfg_path, "w") as f:
     f.write(cfg.dump())
 print(f"Saved model configuration to: {cfg_path}")
-```
 
 ## 7. Run Inference
 
@@ -827,3 +829,8 @@ def batch_inference(image_dir, confidence_threshold=0.5, max_images=5):
 
 print("\nRunning batch inference on validation set...")
 batch_inference(val_images_dir, confidence_threshold=0.5, max_images=3)
+
+# Normalize category IDs to 0-based indexing
+for d in DatasetCatalog.get("sa_id_train"):
+    for anno in d['annotations']:
+        anno['category_id'] = int(anno['category_id']) - 1
