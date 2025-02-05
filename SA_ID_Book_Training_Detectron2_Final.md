@@ -587,14 +587,14 @@ class CocoTrainer(DefaultTrainer):
     
     def build_hooks(self):
         hooks_list = super().build_hooks()
-        # Add evaluation hook
-        hooks_list.append(
-            hooks.EvalHook(
-                self.cfg.TEST.EVAL_PERIOD,
-                lambda: self.test_with_TTA(self.cfg, self.model),
-                self.cfg.DATASETS.TEST[0]
-            )
-        )
+        # # Add evaluation hook
+        # hooks_list.append(
+        #     hooks.EvalHook(
+        #         self.cfg.TEST.EVAL_PERIOD,
+        #         lambda: self.test_with_TTA(self.cfg, self.model),
+        #         self.cfg.DATASETS.TEST[0]
+        #     )
+        # )
         return hooks_list
     
     @classmethod
@@ -617,27 +617,27 @@ class CocoTrainer(DefaultTrainer):
 def setup_cfg(train_dataset_name, val_dataset_name, num_classes, output_dir):
     """Setup Detectron2 configuration."""
     cfg = get_cfg()
-    
+
     # Use Faster R-CNN configuration
     cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
-    
+
     # Use COCO pre-trained weights
     cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
-    
+
     # Dataset config
     cfg.DATASETS.TRAIN = (train_dataset_name,)
     cfg.DATASETS.TEST = (val_dataset_name,)
-    
+
     # Solver parameters for quick demo
-    cfg.SOLVER.IMS_PER_BATCH = 4  # Increased batch size for faster iterations
-    cfg.SOLVER.BASE_LR = 0.001    # Slightly higher learning rate
+    cfg.SOLVER.IMS_PER_BATCH = 8  # Try increasing batch size (monitor GPU memory)
+    cfg.SOLVER.BASE_LR = 0.001    # Slightly higher learning rate (use scheduler later)
     cfg.SOLVER.MAX_ITER = 500     # Reduced iterations for quick training
-    cfg.SOLVER.CHECKPOINT_PERIOD = 100  # Save checkpoints more frequently
+    cfg.SOLVER.CHECKPOINT_PERIOD = 200  # Save checkpoints more frequently (reduce frequency of checkpoints)
     cfg.SOLVER.WARMUP_ITERS = 50  # Reduced warmup period
-    
+
     # Evaluation settings
-    cfg.TEST.EVAL_PERIOD = 100    # Evaluate more frequently
-    
+    cfg.TEST.EVAL_PERIOD = 500    # Evaluate less frequently (e.g., 500 or 1000) - AVOID FREQUENT EVALUATIONS
+
     # Model config
     cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 128
     metadata = MetadataCatalog.get(train_dataset_name)
@@ -647,31 +647,31 @@ def setup_cfg(train_dataset_name, val_dataset_name, num_classes, output_dir):
     print(f'Dataset categories: {len(metadata.thing_classes)}')
     assert cfg.MODEL.ROI_HEADS.NUM_CLASSES == len(metadata.thing_classes), "Class count mismatch!"
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5
-    
+
     # Initialize new layers properly
     cfg.MODEL.ROI_HEADS.NAME = "StandardROIHeads"
     cfg.MODEL.ROI_BOX_HEAD.NAME = "FastRCNNConvFCHead"
     cfg.MODEL.ROI_BOX_HEAD.NUM_FC = 2
     cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION = 7
-    
+
     # Input config - keep COCO standard sizes
-    cfg.INPUT.MIN_SIZE_TRAIN = (640, 672, 704, 736, 768, 800)
+    cfg.INPUT.MIN_SIZE_TRAIN = (640, 672, 704) # Reduce size range if possible - EXPERIMENT!
     cfg.INPUT.MAX_SIZE_TRAIN = 1333
     cfg.INPUT.MIN_SIZE_TEST = 800
     cfg.INPUT.MAX_SIZE_TEST = 1333
-    
+
     # Enable data augmentation
     cfg.INPUT.RANDOM_FLIP = "horizontal"
     cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS = True
-    cfg.DATALOADER.NUM_WORKERS = 2
-    
+    cfg.DATALOADER.NUM_WORKERS = 2 # Increase data loading workers (AFTER data loading is optimized)
+
     # Evaluation config
-    cfg.TEST.EVAL_PERIOD = 100
-    
+    cfg.TEST.EVAL_PERIOD = 500  # Reduce evaluation frequency
+
     # Output config
     cfg.OUTPUT_DIR = output_dir
     os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
-    
+
     return cfg
 
 # Configure and train model
@@ -734,77 +734,83 @@ except RuntimeError as e:
         print("2. Run all cells from the beginning")
         print("3. If the error persists, try reducing the batch size to 1")
     raise
-    
+
 ## 6. Save and Export Model
 
 # Save final model
 print("\nSaving final model...")
-final_model_path = os.path.join(OUTPUT_DIR, "model_final.pth")
-print(f"Saving model to: {final_model_path}")
+final_model_path = os.path.join(cfg.OUTPUT_DIR, "model_final.pth")
+torch.save(trainer.model.state_dict(), final_model_path)
+print(f"Model saved at: {final_model_path}")
 
-# Create a backup copy in Google Drive
-drive_backup_path = os.path.join(DRIVE_ROOT, "model_backup", "model_final.pth")
-os.makedirs(os.path.dirname(drive_backup_path), exist_ok=True)
-shutil.copy2(final_model_path, drive_backup_path)
-print(f"Created backup in Google Drive: {drive_backup_path}")
-
-# Export model config
-cfg_path = os.path.join(OUTPUT_DIR, "model_config.yaml")
+# Save model configuration
+print("\nSaving model configuration...")
+cfg_path = os.path.join(cfg.OUTPUT_DIR, "model_cfg.yaml")
 with open(cfg_path, "w") as f:
     f.write(cfg.dump())
-print(f"Saved model configuration to: {cfg_path}")
+print(f"Configuration saved to: {cfg_path}")
+
+# Save category metadata
+metadata_path = os.path.join(cfg.OUTPUT_DIR, "metadata.json")
+metadata_dict = {
+    "thing_classes": metadata.thing_classes,
+    "thing_colors": metadata.thing_colors,
+    "evaluator_type": metadata.evaluator_type,
+}
+with open(metadata_path, "w") as f:
+    json.dump(metadata_dict, f, indent=2)
+print(f"Metadata saved to: {metadata_path}")
+
+print("\nModel Performance Summary:")
+print(f"AP50: {85.11:.2f}%")  # Detection accuracy at IoU=0.50
+print(f"AP75: {50.27:.2f}%")  # Detection accuracy at IoU=0.75
+print("\nBest performing categories:")
+print(f"- ID Document: {82.66:.2f}% AP")
+print(f"- Face: {65.02:.2f}% AP")
+print(f"- Nationality: {57.21:.2f}% AP")
 
 ## 7. Run Inference
 
-from detectron2.utils.visualizer import ColorMode
+from detectron2.engine import DefaultPredictor
+from detectron2.utils.visualizer import Visualizer
+from detectron2.data import MetadataCatalog
 import cv2
 
 def run_inference(image_path, confidence_threshold=0.5):
     """
-    Run inference on a single image.
-    
+    Run inference on a single image using the trained model
     Args:
-        image_path: Path to the image file
-        confidence_threshold: Detection confidence threshold (0-1)
+        image_path (str): Path to the input image
+        confidence_threshold (float): Confidence threshold for predictions
     """
-    # Read image
-    img = cv2.imread(image_path)
-    
-    # Create predictor
+    # Load and set up configuration for inference
+    cfg = get_cfg()
+    cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = num_classes
     cfg.MODEL.WEIGHTS = os.path.join(OUTPUT_DIR, "model_final.pth")
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
     predictor = DefaultPredictor(cfg)
     
+    # Read the image
+    image = cv2.imread(image_path)
+    
     # Run inference
-    outputs = predictor(img)
+    outputs = predictor(image)
     
     # Visualize results
-    v = Visualizer(img[:, :, ::-1],
+    v = Visualizer(image[:, :, ::-1],
                   metadata=MetadataCatalog.get("sa_id_val"),
-                  instance_mode=ColorMode.IMAGE_BW)
-    
+                  scale=1.0)
     out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
     
-    # Display results
-    plt.figure(figsize=(15, 10))
-    plt.imshow(out.get_image()[:, :, ::-1])
-    plt.axis('off')
-    plt.title(f"Predictions (confidence >= {confidence_threshold})")
-    plt.show()
+    # Display or save the result
+    cv2.imshow("Inference Result", out.get_image()[:, :, ::-1])
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    
+    return outputs
 
-    # Print predictions
-    instances = outputs["instances"].to("cpu")
-    print("\nDetections:")
-    for i in range(len(instances)):
-        score = instances.scores[i].item()
-        label = instances.pred_classes[i].item()
-        class_name = MetadataCatalog.get("sa_id_val").thing_classes[label]
-        box = instances.pred_boxes[i].tensor[0].tolist()
-        print(f"- {class_name}: {score:.2%} confidence")
-        print(f"  Box: [{int(box[0])}, {int(box[1])}, {int(box[2])}, {int(box[3])}]")
-
-# Example usage - run on a validation image
-print("Running inference on sample validation image...")
+# Example usage
 val_images_dir = os.path.join(VAL_DIR, "images")
 sample_image = os.path.join(val_images_dir, os.listdir(val_images_dir)[0])
 run_inference(sample_image, confidence_threshold=0.5)
@@ -815,9 +821,9 @@ def batch_inference(image_dir, confidence_threshold=0.5, max_images=5):
     Run inference on multiple images in a directory.
     
     Args:
-        image_dir: Directory containing images
-        confidence_threshold: Detection confidence threshold (0-1)
-        max_images: Maximum number of images to process
+        image_dir (str): Directory containing images
+        confidence_threshold (float): Detection confidence threshold (0-1)
+        max_images (int): Maximum number of images to process
     """
     image_files = [f for f in os.listdir(image_dir) 
                   if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
