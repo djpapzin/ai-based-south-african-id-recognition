@@ -11,6 +11,8 @@ from detectron2.data import MetadataCatalog
 from detectron2.model_zoo import model_zoo
 from paddleocr import PaddleOCR
 from document_classifier import DocumentClassifier
+import numpy as np
+import argparse
 
 # Set Tesseract executable path
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
@@ -19,7 +21,7 @@ pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tessera
 ocr = PaddleOCR(use_angle_cls=True, lang='en')
 
 # Initialize document classifier
-document_classifier = DocumentClassifier('classification_model_final.pth')
+document_classifier = DocumentClassifier('models/classification_model_final.pth')
 
 # Register dataset metadata
 thing_classes = [
@@ -30,8 +32,8 @@ thing_classes = [
 ]
 
 # Register metadata
-if "sa_id_val" not in MetadataCatalog:
-    MetadataCatalog.get("sa_id_val").set(thing_classes=thing_classes)
+if "sa_id" not in MetadataCatalog:
+    MetadataCatalog.get("sa_id").set(thing_classes=thing_classes)
 
 def clean_text(text, field_type):
     """Clean OCR text based on field type"""
@@ -49,79 +51,101 @@ def clean_text(text, field_type):
         # Remove extra whitespace and newlines
         return ' '.join(text.split())
 
-def process_segment_with_ocr(image_path, field_type):
-    """Process a segment with both Pytesseract and PaddleOCR"""
-    results = []
-    
-    # Read image
-    image = cv2.imread(image_path)
-    if image is None:
-        return {'error': "Could not read image"}
-    
-    # Preprocess for OCR
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    if field_type in ['id_number', 'date_of_birth']:
-        processed = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-    else:
-        processed = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                        cv2.THRESH_BINARY, 11, 2)
-    
-    # Pytesseract OCR
+def process_segment_with_ocr(image, label):
+    """Process a segment with OCR and return results from both engines"""
     try:
-        config = ''
-        if field_type == 'id_number':
-            config = '--psm 7 -c tessedit_char_whitelist=0123456789'
-        elif field_type == 'date_of_birth':
-            config = '--psm 7 -c tessedit_char_whitelist=0123456789/-'
-        else:
-            config = '--psm 6'
-            
-        tesseract_text = pytesseract.image_to_string(processed, config=config)
-        results.append({
-            'engine': 'Pytesseract',
-            'text': clean_text(tesseract_text, field_type)
-        })
-    except Exception as e:
-        print(f"Pytesseract error: {str(e)}")
-        results.append({
-            'engine': 'Pytesseract',
-            'text': ''
-        })
-    
-    # PaddleOCR
-    try:
-        paddle_result = ocr.ocr(image, cls=True)
-        paddle_text = ""
-        if paddle_result[0]:
-            texts = [line[1][0] for line in paddle_result[0]]
-            paddle_text = " ".join(texts)
-            paddle_text = clean_text(paddle_text, field_type)
+        results = {
+            'paddle_ocr': '',
+            'tesseract_ocr': ''
+        }
         
-        results.append({
-            'engine': 'PaddleOCR',
-            'text': paddle_text
-        })
+        # Skip OCR for these labels
+        if label in ['face', 'signature', 'id_document']:
+            return results
+            
+        # PaddleOCR
+        ocr = PaddleOCR(use_angle_cls=True, lang='en')
+        paddle_result = ocr.ocr(image, cls=True)
+        
+        if paddle_result and paddle_result[0]:
+            texts = []
+            for line in paddle_result[0]:
+                if line[1][0]:  # Check if there's text detected
+                    texts.append(line[1][0])  # Get the text content
+            results['paddle_ocr'] = " ".join(texts)
+            
+        # Tesseract OCR
+        # Convert image to RGB if it's not
+        if len(image.shape) == 2:
+            image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+        elif image.shape[2] == 4:
+            image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
+        elif image.shape[2] == 3:
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            
+        results['tesseract_ocr'] = pytesseract.image_to_string(image).strip()
+        
+        return results
     except Exception as e:
-        print(f"PaddleOCR error: {str(e)}")
-        results.append({
-            'engine': 'PaddleOCR',
-            'text': ''
-        })
+        print(f"OCR Error for {label}: {str(e)}")
+        return {'paddle_ocr': '', 'tesseract_ocr': ''}
+
+def process_segment_with_ocr_segment_path(segment_path, field_type):
+    """Process a segment with OCR based on field type"""
+    # Initialize PaddleOCR
+    ocr = PaddleOCR(use_angle_cls=True, lang='en')
     
-    return results
+    # Read the image
+    image = cv2.imread(segment_path)
+    if image is None:
+        return {"error": f"Could not read image at {segment_path}"}
+    
+    # Run OCR
+    try:
+        result = ocr.ocr(image, cls=True)
+        if not result or not result[0]:
+            return {"text": "", "confidence": 0.0}
+        
+        # Extract text and confidence
+        text_results = []
+        for line in result[0]:
+            text = line[1][0]  # Get the recognized text
+            confidence = float(line[1][1])  # Get the confidence score
+            text_results.append({
+                "text": text,
+                "confidence": confidence
+            })
+        
+        return text_results
+        
+    except Exception as e:
+        return {"error": str(e)}
 
 def run_inference(image_path, model_path, confidence_threshold=0.5):
     """Run inference on a single image"""
+    results = {
+        "classification": {},
+        "segments": []
+    }
+    
     # First classify the document type
     try:
         doc_type, confidence = document_classifier.classify(image_path)
         print(f"\nDocument Classification:")
         print(f"Type: {doc_type}")
         print(f"Confidence: {confidence:.2%}")
+        
+        results["classification"] = {
+            "type": doc_type,
+            "confidence": float(confidence)
+        }
     except Exception as e:
         print(f"Warning: Document classification failed: {str(e)}")
         doc_type = None
         confidence = 0.0
+        results["classification"] = {
+            "error": str(e)
+        }
 
     # Configure model based on document type
     cfg = get_cfg()
@@ -142,132 +166,153 @@ def run_inference(image_path, model_path, confidence_threshold=0.5):
     # Run inference
     outputs = predictor(image)
     
-    # Add document type to outputs for downstream processing
-    outputs["document_type"] = {
-        "class": doc_type,
-        "confidence": confidence
-    }
+    # Create visualization
+    v = Visualizer(image[:, :, ::-1], MetadataCatalog.get("sa_id"), scale=1.0)
+    visualization = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+    visualization = visualization.get_image()[:, :, ::-1]
     
-    # Visualize results
-    v = Visualizer(image[:, :, ::-1],
-                  metadata=MetadataCatalog.get("sa_id_val"),
-                  scale=1.0)
-    out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+    # Add visualization and results to output
+    outputs["visualization"] = visualization
+    outputs["results"] = results
     
-    return outputs, out.get_image()[:, :, ::-1]
+    return outputs
 
 def save_segments(image_path, outputs, save_dir):
-    """Save detected segments with their labels and OCR results"""
-    # Create directory for this image
-    base_name = os.path.splitext(os.path.basename(image_path))[0]
-    image_dir = os.path.join(save_dir, base_name)
-    os.makedirs(image_dir, exist_ok=True)
+    """Save detected segments and process with OCR"""
+    try:
+        # Read the image
+        image = cv2.imread(image_path)
+        if image is None:
+            raise ValueError(f"Could not read image at {image_path}")
+        
+        # Get predictions
+        predictions = outputs["instances"].to("cpu")
+        boxes = predictions.pred_boxes.tensor.numpy()
+        classes = predictions.pred_classes.numpy()
+        scores = predictions.scores.numpy()
+        
+        # Create directory for this image's segments
+        image_name = os.path.splitext(os.path.basename(image_path))[0]
+        segments_dir = os.path.join(save_dir, image_name)
+        os.makedirs(segments_dir, exist_ok=True)
+        
+        # Save detection and classification results
+        results = outputs.get("results", {})
+        results["image_path"] = image_path
+        results["segments"] = []
+        
+        print("\nDetected Segments:")
+        print("-" * 50)
+        
+        # Process each detection
+        for i, (box, class_id, score) in enumerate(zip(boxes, classes, scores)):
+            # Get coordinates
+            x1, y1, x2, y2 = box.astype(int)
+            
+            # Get class label
+            label = thing_classes[class_id]
+            
+            # Crop segment
+            segment = image[y1:y2, x1:x2]
+            
+            # Save segment image
+            segment_filename = f"{label}_{i}.jpg"
+            segment_path = os.path.join(segments_dir, segment_filename)
+            cv2.imwrite(segment_path, segment)
+            
+            # Process with OCR and save results
+            ocr_results = process_segment_with_ocr(segment, label)
+            
+            # Save OCR results to text file if not a skipped label
+            if label not in ['face', 'signature', 'id_document']:
+                txt_filename = f"{label}_{i}.txt"
+                txt_path = os.path.join(segments_dir, txt_filename)
+                with open(txt_path, 'w', encoding='utf-8') as f:
+                    f.write(f"PaddleOCR Result:\n{ocr_results['paddle_ocr']}\n\n")
+                    f.write(f"Tesseract Result:\n{ocr_results['tesseract_ocr']}")
+            
+            # Print detection info
+            print(f"Label: {label}")
+            print(f"Confidence: {score:.2%}")
+            if label not in ['face', 'signature', 'id_document']:
+                print(f"PaddleOCR: {ocr_results['paddle_ocr']}")
+                print(f"Tesseract: {ocr_results['tesseract_ocr']}")
+            print("-" * 50)
+            
+            # Add to results
+            segment_info = {
+                "label": label,
+                "confidence": float(score),
+                "coordinates": box.tolist(),
+                "segment_path": segment_path
+            }
+            
+            if label not in ['face', 'signature', 'id_document']:
+                segment_info.update({
+                    "paddle_ocr": ocr_results['paddle_ocr'],
+                    "tesseract_ocr": ocr_results['tesseract_ocr']
+                })
+            
+            results["segments"].append(segment_info)
+        
+        # Save results to JSON
+        results_file = os.path.join(segments_dir, "detection_results.json")
+        with open(results_file, 'w') as f:
+            json.dump(results, f, indent=2)
+        
+        return results
     
-    # Save document classification result
-    doc_type = outputs.get("document_type", {"class": "unknown", "confidence": 0.0})
-    
-    # Process detections
-    instances = outputs["instances"].to("cpu")
-    metadata = MetadataCatalog.get("sa_id_val")
-    field_counts = {}
-    detection_results = {}
-    
-    for i in range(len(instances)):
-        box = instances.pred_boxes[i].tensor[0].numpy().astype(int)
-        label = instances.pred_classes[i].item()
-        score = instances.scores[i].item()
-        class_name = metadata.thing_classes[label]
-        
-        # Handle duplicate fields
-        if class_name in field_counts:
-            field_counts[class_name] += 1
-            filename = f"{class_name}_{field_counts[class_name]}"
-        else:
-            field_counts[class_name] = 1
-            filename = class_name
-        
-        # Extract and save segment
-        x1, y1, x2, y2 = box
-        padding = 5
-        x1, y1 = max(0, x1 - padding), max(0, y1 - padding)
-        x2, y2 = min(instances.image_size[1], x2 + padding), min(instances.image_size[0], y2 + padding)
-        segment = instances.image_tensor[i, :, y1:y2, x1:x2].numpy().astype(np.uint8)
-        
-        # Save image segment
-        image_filename = f"{filename}.jpg"
-        cv2.imwrite(os.path.join(image_dir, image_filename), segment)
-        
-        # Process with OCR and save results
-        ocr_results = process_segment_with_ocr(os.path.join(image_dir, image_filename), class_name)
-        
-        # Save OCR results to text file
-        text_filename = f"{filename}.txt"
-        with open(os.path.join(image_dir, text_filename), 'w', encoding='utf-8') as f:
-            for result in ocr_results:
-                f.write(f"{result['engine']} OCR: {result['text']}\n")
-        
-        # Update results dictionary
-        detection_results[filename] = {
-            "class": class_name,
-            "confidence": float(score),
-            "bbox": [int(x) for x in box],
-            "ocr_results": ocr_results
-        }
-    
-    # Update metadata with document classification
-    metadata_dict = {
-        "timestamp": datetime.now().isoformat(),
-        "document_type": {
-            "class": doc_type["class"],
-            "confidence": doc_type["confidence"]
-        },
-        "detections": detection_results
-    }
-    
-    with open(os.path.join(image_dir, "detection_metadata.json"), 'w') as f:
-        json.dump(metadata_dict, f, indent=2)
+    except Exception as e:
+        print(f"Error saving segments: {str(e)}")
+        return None
 
 if __name__ == "__main__":
-    # Configuration
-    MODEL_PATH = "models/model_final.pth"  # Path to your model weights
-    IMAGE_DIR = "test_images"  # Directory containing test images
-    SAVE_DIR = "detected_segments"  # Directory to save cropped segments
+    parser = argparse.ArgumentParser(description='Run local inference on ID documents')
+    parser.add_argument('--input', required=True, help='Path to input image or directory')
+    parser.add_argument('--output', required=True, help='Path to output directory')
+    args = parser.parse_args()
+
+    # Set up paths
+    IMAGE_DIR = args.input
+    SAVE_DIR = args.output
+    MODEL_PATH = "models/model_final.pth"
     CONFIDENCE_THRESHOLD = 0.5
-    
-    # Verify model exists
-    if not os.path.exists(MODEL_PATH):
-        print(f"Error: Model not found at {MODEL_PATH}")
-        print("Please ensure model_final.pth is in the same directory as this script")
-        exit(1)
-    
+
     # Create output directories
-    os.makedirs(IMAGE_DIR, exist_ok=True)
     os.makedirs(SAVE_DIR, exist_ok=True)
-    
-    # Process all images in the directory
-    image_files = [f for f in os.listdir(IMAGE_DIR) 
-                  if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-    
-    if not image_files:
-        print(f"No images found in {IMAGE_DIR}")
-        print("Please add some images to the test_images directory")
-        exit(1)
-    
-    print(f"Found {len(image_files)} images to process")
-    
+    os.makedirs(os.path.join(SAVE_DIR, "segments"), exist_ok=True)
+    os.makedirs(os.path.join(SAVE_DIR, "visualizations"), exist_ok=True)
+
+    # Get list of images to process
+    if os.path.isfile(IMAGE_DIR):
+        image_files = [os.path.basename(IMAGE_DIR)]
+        IMAGE_DIR = os.path.dirname(IMAGE_DIR)
+    else:
+        image_files = [f for f in os.listdir(IMAGE_DIR) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+
+    print(f"Found {len(image_files)} images to process\n")
+
+    # Process each image
     for image_file in image_files:
         try:
             print(f"\nProcessing: {image_file}")
             image_path = os.path.join(IMAGE_DIR, image_file)
-            outputs, visualization = run_inference(image_path, MODEL_PATH, CONFIDENCE_THRESHOLD)
-            save_segments(image_path, outputs, SAVE_DIR)
-            output_dir = "outputs"
-            os.makedirs(output_dir, exist_ok=True)
-            output_path = os.path.join(output_dir, f"detected_{os.path.basename(image_path)}")
-            cv2.imwrite(output_path, visualization)
-            print(f"\nSaved visualization to: {output_path}")
+            
+            # Run inference
+            outputs = run_inference(image_path, MODEL_PATH, CONFIDENCE_THRESHOLD)
+            
+            # Save segments and results
+            segments_dir = os.path.join(SAVE_DIR, "segments")
+            save_segments(image_path, outputs, segments_dir)
+            
+            # Save visualization
+            vis_dir = os.path.join(SAVE_DIR, "visualizations")
+            vis_path = os.path.join(vis_dir, f"detected_{os.path.basename(image_path)}")
+            cv2.imwrite(vis_path, outputs.get("visualization", None))
+            print(f"\nSaved visualization to: {vis_path}")
+            
         except Exception as e:
             print(f"Error processing {image_file}: {str(e)}")
             continue
-    
+
     print("\nProcessing complete!")
