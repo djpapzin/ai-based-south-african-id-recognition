@@ -1,157 +1,117 @@
 # South African ID Recognition Project Plan
 
 ## Project Overview
-Implementing an AI-based South African ID document recognition system using Detectron2 for field detection.
+Implementation of a South African ID document recognition system using Detectron2 and OCR engines, with completed training, functional inference pipeline, and dual OCR integration.
 
-## Project Status Overview
+## Current Status (February 6, 2024)
 
-### Completed Tasks:
-1. Dataset Preparation 
-   - Refined dataset to 66 high-quality images
-   - Split into 52 training and 14 validation images
-   - Standardized annotations
-   - Preserved image aspect ratios
-   - Unified category system
-
-2. Model Architecture 
-   - Selected Faster R-CNN architecture
-   - Configured ResNet50-FPN backbone
-   - Implemented evaluation hooks
-   - Set up TensorBoard logging
-
-3. Training Configuration 
-   - Optimized batch sizes for GPU
-   - Configured learning rate schedule
-   - Set up evaluation metrics
-   - Prepared validation pipeline
-
-4. Dataset preparation and splitting 
-5. Model configuration setup 
-6. Training script development 
-7. GPU acceleration implementation 
-8. Data validation checks 
-
-### Current Phase:
+### Completed 
 1. Model Training
-   - Model: Faster R-CNN with ResNet50-FPN backbone
-   - Status: Initial training configuration complete
-   - Focus: Quick demo implementation (10-15 minutes training)
+   - Architecture: Faster R-CNN with ResNet50-FPN
+   - Training Parameters:
+     * Batch Size: 8
+     * Learning Rate: 0.001
+     * Iterations: 500
+     * Device: GPU
+   - Performance:
+     * AP (IoU=0.50:0.95): 52.30%
+     * AP50 (IoU=0.50): 89.64%
+     * AP75 (IoU=0.75): 53.40%
 
-2. Technical Setup
-   - Batch size: 4 (GPU)
-   - Learning rate: 0.001
-   - 500 iterations
-   - 100 iteration evaluation period
+2. Inference Pipeline
+   - GPU acceleration
+   - Batch processing
+   - Segment saving
+   - Confidence thresholding
+   - Metadata export
+   - Local inference setup script
 
-### Next Steps:
-1. Complete demo training run
-2. Evaluate initial model performance
-3. Plan full training with increased iterations
-4. Develop inference pipeline
-5. Add OCR integration
-6. Create demo interface
+3. Dataset Preparation
+   - 66 high-quality images
+   - 52 training / 14 validation split
+   - COCO JSON annotations
+   - 15 field categories
 
-## Timeline
-1. February 2024
-   - Complete initial training
-   - Evaluate performance
-   - Begin pipeline development
+4. OCR Integration
+   - Dual OCR engine support:
+     * Tesseract OCR v5.5.0
+     * PaddleOCR v2.7 (PP-OCRv4)
+   - Field-specific preprocessing
+   - Custom text cleaning rules
+   - Results validation
+   - Confidence scores
 
-2. March 2024
-   - Finalize model training
-   - Complete OCR integration
-   - Deploy initial version
+### Best Performing Categories
+1. ID Document: 81.81% AP
+2. Face: 66.25% AP
+3. Nationality: 58.93% AP
+4. Names: 51.06% AP
+5. Citizenship Status: 49.35% AP
 
-## Success Metrics
-1. Model Performance
-   - Field detection accuracy > 90%
-   - Processing time < 2 seconds
-   - High precision in text regions
+### Technical Infrastructure
+1. Training Environment
+   - Google Colab
+   - GPU acceleration
+   - Detectron2 framework
 
-2. System Reliability
-   - Robust to image variations
-   - Accurate field detection
-   - Reliable text extraction
+2. Inference Environment
+   - Local Python environment
+   - Detectron2
+   - Tesseract OCR
+   - PaddleOCR
+   - OpenCV
 
-## Technical Stack
-- Object Detection: Detectron2
-- Training Environment: Google Colab
-- Image Processing: OpenCV
-- Data Format: COCO JSON
-- OCR Engine: Tesseract v5
+## Next Phase: Document Classification
 
-## Dataset Structure
-```
-train_val_dataset/
-├── train/
-│   ├── annotations.json (52 images)
-│   └── images/
-└── val/
-    ├── annotations.json (14 images)
-    └── images/
-```
+### Objectives
+1. Implement document classification model
+   - Binary classification between old and new ID documents
+   - High accuracy and fast inference
+   - Integration with existing pipeline
 
-## Categories
-1. Field Categories:
-   - id_document
-   - surname
-   - names
-   - sex
-   - nationality
-   - id_number
-   - date_of_birth
-   - country_of_birth
-   - citizenship_status
-   - face
-   - signature
+### Implementation Plan
+1. Dataset Preparation
+   - Collect and label images of old and new ID documents
+   - Split into training/validation sets
+   - Apply data augmentation if needed
 
-## Performance Requirements
-- Document Detection: 99% accuracy
-- Field Detection: High precision
-- Processing Time: <10 seconds total
-- Output: Structured JSON with confidence scores
+2. Model Development
+   - Select appropriate architecture (e.g., ResNet, EfficientNet)
+   - Train classification model
+   - Validate performance
+   - Export model for inference
 
-## Technical Specifications
+3. Pipeline Integration
+   - Add classification step before field detection
+   - Update inference pipeline
+   - Handle document-specific processing
+   - Update visualization and results
 
-### Current Training Configuration (Quick Demo)
-- Batch Size: 4
-- Learning Rate: 0.001
-- Max Iterations: 500
-- Evaluation Period: 100
-- GPU Acceleration: Enabled
+4. Testing and Validation
+   - Test with various document types
+   - Measure classification accuracy
+   - Validate end-to-end performance
+   - Document results and metrics
 
-### Planned Full Training Configuration
-- Batch Size: 2
-- Learning Rate: 0.00025
-- Max Iterations: 5000
-- ROI Batch Size: 128
-- Score Threshold: 0.5
+### Timeline
+1. Week 1: Dataset preparation and model selection
+2. Week 2: Model training and validation
+3. Week 3: Pipeline integration and testing
+4. Week 4: Documentation and deployment
 
-## Known Issues & Solutions
-1. Category ID Mapping
-   - Issue: IDs don't start from 1
-   - Solution: Using Detectron2's automatic mapping
+## Future Enhancements
+1. Improve OCR accuracy
+   - Enhanced preprocessing
+   - Post-processing validation
+   - Field-specific optimizations
 
-2. CUDA Memory Management
-   - Issue: Initial CUDA errors
-   - Solution: Implemented validation checks and proper memory handling
+2. Performance Optimization
+   - Batch processing
+   - Inference speed improvements
+   - Memory optimization
 
-## Project Dependencies
-- Python 3.x
-- PyTorch
-- Detectron2
-- OpenCV
-- CUDA (for GPU acceleration)
-
-## Documentation Status
-- Project setup documentation
-- Training configuration guide
-- Model evaluation metrics (pending)
-- Inference pipeline documentation (planned)
-- User interface guide (planned)
-
-## Notes
-- Dataset is properly organized and validated
-- Training infrastructure is working correctly
-- Initial training showing promising results
-- Ready for completion of training phase
+3. User Interface Development
+   - Web-based interface
+   - Batch processing support
+   - Results visualization
+   - Export functionality

@@ -13,8 +13,8 @@ A comprehensive solution for extracting and processing information from South Af
 
 ### OCR Pipeline
 - Implemented Features:
-  * Tesseract OCR integration
-  * Image preprocessing
+  * Dual OCR Engine Support (Tesseract + PaddleOCR)
+  * Field-specific preprocessing
   * OCR visualization
   * Results packaging
   * Image-only field handling
@@ -24,6 +24,12 @@ A comprehensive solution for extracting and processing information from South Af
   * Batch processing
   * Visualization options
   * Results export (JSON/MD)
+
+### Latest Updates
+- Added PaddleOCR integration
+- Implemented local inference script
+- Added field-specific OCR configurations
+- Improved text cleaning for different field types
 
 ### Output Generation
 - JSON results with field types

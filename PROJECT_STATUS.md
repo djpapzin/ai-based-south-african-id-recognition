@@ -1,20 +1,20 @@
 # South African ID Document Detection - Project Status
 
-## Latest Update: February 6, 2024
+## Latest Update: March 21, 2024
 
 ### Current Status
 ✅ Training Complete
 ✅ Inference Pipeline Ready
 ✅ OCR Integration Complete
+✅ Local Processing Script Ready
 
 ### Implementation Progress
-- ✅ Dataset preparation complete (52 train/14 val)
+- ✅ Dataset preparation complete (80 train/21 val)
 - ✅ Model training completed (500 iterations)
 - ✅ Inference pipeline implemented
-- ✅ Segment saving functionality added
-- ✅ GPU acceleration optimized
-- ✅ Dual OCR integration (Tesseract + PaddleOCR)
-- ✅ Local inference setup script
+- ✅ Dual OCR integration complete
+- ✅ Local inference setup script ready
+- ✅ Field-specific preprocessing implemented
 
 ### Technical Details
 - Model: Faster R-CNN with ResNet50-FPN backbone
@@ -22,7 +22,7 @@
   * Batch Size: 8
   * Learning Rate: 0.001
   * Iterations: 500
-  * Device: GPU
+  * Device: GPU/CPU support
 - OCR Engines:
   * Tesseract OCR v5.5.0
   * PaddleOCR v2.7 (PP-OCRv4)
@@ -33,36 +33,27 @@
   * AP50 (IoU=0.50): 89.64%
   * AP75 (IoU=0.75): 53.40%
 
-- Per-Category Performance:
-  * ID Document: 81.81% AP
-  * Face: 66.25% AP
-  * Nationality: 58.93% AP
-  * Names: 51.06% AP
-  * Citizenship Status: 49.35% AP
-  * Date of Birth: 47.04% AP
-  * ID Number: 46.41% AP
-  * Surname: 45.56% AP
-  * Sex: 43.11% AP
-  * Signature: 44.91% AP
-
 ### Next Steps
-1. 🔄 Implement document classification model
+1. 🔄 Document Classification Model
    - Binary classification: Old vs New ID Document
-   - Integration with current inference pipeline
+   - Integration with current pipeline
    - Model selection and training
-2. 🔄 Enhance OCR accuracy
-   - Field-specific preprocessing
-   - Result validation and cleaning
-3. 🔄 Create user interface
-4. 🔄 Performance optimization
-   - Batch processing
-   - Inference speed improvements
+
+2. 🔄 OCR Enhancement
+   - Improve accuracy on low-quality images
+   - Enhance field-specific preprocessing
+   - Add result validation
+
+3. 🔄 User Interface
+   - Create web interface
+   - Add batch processing support
+   - Implement progress tracking
 
 ### Recent Updates
-- Added dual OCR engine support (Tesseract + PaddleOCR)
-- Created setup script for local inference
-- Improved text cleaning based on field types
+- Added PaddleOCR integration
+- Implemented local inference script
 - Added field-specific OCR configurations
+- Improved text cleaning for different field types
 
 ### Known Issues
 - Need to improve OCR accuracy on low-quality images
