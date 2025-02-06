@@ -177,7 +177,7 @@ def run_inference(image_path, model_path, confidence_threshold=0.5):
     
     return outputs
 
-def save_segments(image_path, outputs, save_dir):
+def save_segments(image_path, outputs, save_dir, classification_result=None):
     """Save detected segments and process with OCR"""
     try:
         # Read the image
@@ -200,6 +200,17 @@ def save_segments(image_path, outputs, save_dir):
         results = outputs.get("results", {})
         results["image_path"] = image_path
         results["segments"] = []
+        
+        # Add classification results if provided
+        if classification_result:
+            results["classification"] = classification_result
+            # Save classification result to a separate text file
+            class_txt_path = os.path.join(segments_dir, "classification_result.txt")
+            with open(class_txt_path, 'w', encoding='utf-8') as f:
+                f.write(f"Document Classification:\n")
+                f.write(f"Type: {classification_result['document_type']}\n")
+                f.write(f"Confidence: {classification_result['confidence']:.2%}\n")
+                f.write("-" * 50 + "\n")
         
         print("\nDetected Segments:")
         print("-" * 50)
@@ -228,6 +239,12 @@ def save_segments(image_path, outputs, save_dir):
                 txt_filename = f"{label}_{i}.txt"
                 txt_path = os.path.join(segments_dir, txt_filename)
                 with open(txt_path, 'w', encoding='utf-8') as f:
+                    if classification_result:
+                        f.write(f"Document Classification:\n")
+                        f.write(f"Type: {classification_result['document_type']}\n")
+                        f.write(f"Confidence: {classification_result['confidence']:.2%}\n")
+                        f.write("-" * 50 + "\n\n")
+                    f.write(f"Field: {label}\n")
                     f.write(f"PaddleOCR Result:\n{ocr_results['paddle_ocr']}\n\n")
                     f.write(f"Tesseract Result:\n{ocr_results['tesseract_ocr']}")
             
@@ -303,7 +320,8 @@ if __name__ == "__main__":
             
             # Save segments and results
             segments_dir = os.path.join(SAVE_DIR, "segments")
-            save_segments(image_path, outputs, segments_dir)
+            classification_result = outputs.get("results", {}).get("classification", None)
+            save_segments(image_path, outputs, segments_dir, classification_result)
             
             # Save visualization
             vis_dir = os.path.join(SAVE_DIR, "visualizations")
