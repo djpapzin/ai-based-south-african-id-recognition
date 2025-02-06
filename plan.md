@@ -1,14 +1,35 @@
 # South African ID Document Processing Project Plan
 
-## Current Status (February 5, 2024)
+## Current Status (March 21, 2024)
 
-### Dataset Preparation (Completed)
+### Dataset Preparation (Completed) ✓
 - Successfully merged and processed datasets:
   * Total Images: 66
   * Training Set: 52 images
   * Validation Set: 14 images
   * Format: Variable size (preserving aspect ratio)
   * Annotations: COCO JSON format
+
+### Object Detection (Completed) ✓
+- Model: Detectron2 Faster R-CNN
+- Performance:
+  * AP (IoU=0.50:0.95): 52.30%
+  * AP50 (IoU=0.50): 89.64%
+  * AP75 (IoU=0.75): 53.40%
+
+### OCR Pipeline (In Progress) 🔄
+- Implemented:
+  * Tesseract OCR integration
+  * Image preprocessing with skew correction
+  * OCR detection visualization
+  * Image-only field handling
+  * Results packaging (JSON, MD, ZIP)
+
+- To Do:
+  * Improve OCR accuracy
+  * Add PaddleOCR as alternative
+  * Enhance text cleaning
+  * Add confidence scores for OCR
 
 ### Categories (Finalized)
 1. Field Categories (11):
