@@ -10,12 +10,16 @@ from detectron2.utils.visualizer import Visualizer
 from detectron2.data import MetadataCatalog
 from detectron2.model_zoo import model_zoo
 from paddleocr import PaddleOCR
+from document_classifier import DocumentClassifier
 
 # Set Tesseract executable path
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 # Initialize OCR engines
 ocr = PaddleOCR(use_angle_cls=True, lang='en')
+
+# Initialize document classifier
+document_classifier = DocumentClassifier('classification_model_final.pth')
 
 # Register dataset metadata
 thing_classes = [
@@ -108,11 +112,22 @@ def process_segment_with_ocr(image_path, field_type):
 
 def run_inference(image_path, model_path, confidence_threshold=0.5):
     """Run inference on a single image"""
-    # Setup configuration
+    # First classify the document type
+    try:
+        doc_type, confidence = document_classifier.classify(image_path)
+        print(f"\nDocument Classification:")
+        print(f"Type: {doc_type}")
+        print(f"Confidence: {confidence:.2%}")
+    except Exception as e:
+        print(f"Warning: Document classification failed: {str(e)}")
+        doc_type = None
+        confidence = 0.0
+
+    # Configure model based on document type
     cfg = get_cfg()
     cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
     cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(thing_classes)
-    cfg.MODEL.DEVICE = 'cpu'  # Force CPU
+    cfg.MODEL.DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     cfg.MODEL.WEIGHTS = model_path
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
 
@@ -127,52 +142,35 @@ def run_inference(image_path, model_path, confidence_threshold=0.5):
     # Run inference
     outputs = predictor(image)
     
+    # Add document type to outputs for downstream processing
+    outputs["document_type"] = {
+        "class": doc_type,
+        "confidence": confidence
+    }
+    
     # Visualize results
     v = Visualizer(image[:, :, ::-1],
                   metadata=MetadataCatalog.get("sa_id_val"),
                   scale=1.0)
     out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
     
-    # Save visualization
-    output_dir = "outputs"
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, f"detected_{os.path.basename(image_path)}")
-    cv2.imwrite(output_path, out.get_image()[:, :, ::-1])
-    print(f"\nSaved visualization to: {output_path}")
-    
-    # Print predictions
-    instances = outputs["instances"].to("cpu")
-    print("\nDetections:")
-    for i in range(len(instances)):
-        score = instances.scores[i].item()
-        label = instances.pred_classes[i].item()
-        class_name = MetadataCatalog.get("sa_id_val").thing_classes[label]
-        box = instances.pred_boxes[i].tensor[0].tolist()
-        print(f"- {class_name}: {score:.2%} confidence")
-        print(f"  Box: [{int(box[0])}, {int(box[1])}, {int(box[2])}, {int(box[3])}]")
-    
-    return outputs
+    return outputs, out.get_image()[:, :, ::-1]
 
 def save_segments(image_path, outputs, save_dir):
     """Save detected segments with their labels and OCR results"""
-    image = cv2.imread(image_path)
-    if image is None:
-        print(f"Could not read image: {image_path}")
-        return
-    
     # Create directory for this image
     base_name = os.path.splitext(os.path.basename(image_path))[0]
     image_dir = os.path.join(save_dir, base_name)
     os.makedirs(image_dir, exist_ok=True)
     
+    # Save document classification result
+    doc_type = outputs.get("document_type", {"class": "unknown", "confidence": 0.0})
+    
     # Process detections
     instances = outputs["instances"].to("cpu")
     metadata = MetadataCatalog.get("sa_id_val")
     field_counts = {}
-    results = {
-        "timestamp": datetime.now().isoformat(),
-        "detections": {}
-    }
+    detection_results = {}
     
     for i in range(len(instances)):
         box = instances.pred_boxes[i].tensor[0].numpy().astype(int)
@@ -192,8 +190,8 @@ def save_segments(image_path, outputs, save_dir):
         x1, y1, x2, y2 = box
         padding = 5
         x1, y1 = max(0, x1 - padding), max(0, y1 - padding)
-        x2, y2 = min(image.shape[1], x2 + padding), min(image.shape[0], y2 + padding)
-        segment = image[y1:y2, x1:x2]
+        x2, y2 = min(instances.image_size[1], x2 + padding), min(instances.image_size[0], y2 + padding)
+        segment = instances.image_tensor[i, :, y1:y2, x1:x2].numpy().astype(np.uint8)
         
         # Save image segment
         image_filename = f"{filename}.jpg"
@@ -209,18 +207,25 @@ def save_segments(image_path, outputs, save_dir):
                 f.write(f"{result['engine']} OCR: {result['text']}\n")
         
         # Update results dictionary
-        results["detections"][filename] = {
+        detection_results[filename] = {
             "class": class_name,
             "confidence": float(score),
             "bbox": [int(x) for x in box],
             "ocr_results": ocr_results
         }
     
-    # Save metadata
-    with open(os.path.join(image_dir, "detection_metadata.json"), 'w', encoding='utf-8') as f:
-        json.dump(results, f, indent=2, ensure_ascii=False)
+    # Update metadata with document classification
+    metadata_dict = {
+        "timestamp": datetime.now().isoformat(),
+        "document_type": {
+            "class": doc_type["class"],
+            "confidence": doc_type["confidence"]
+        },
+        "detections": detection_results
+    }
     
-    print(f"Saved {len(instances)} segments with OCR results to {image_dir}")
+    with open(os.path.join(image_dir, "detection_metadata.json"), 'w') as f:
+        json.dump(metadata_dict, f, indent=2)
 
 if __name__ == "__main__":
     # Configuration
@@ -254,8 +259,13 @@ if __name__ == "__main__":
         try:
             print(f"\nProcessing: {image_file}")
             image_path = os.path.join(IMAGE_DIR, image_file)
-            outputs = run_inference(image_path, MODEL_PATH, CONFIDENCE_THRESHOLD)
+            outputs, visualization = run_inference(image_path, MODEL_PATH, CONFIDENCE_THRESHOLD)
             save_segments(image_path, outputs, SAVE_DIR)
+            output_dir = "outputs"
+            os.makedirs(output_dir, exist_ok=True)
+            output_path = os.path.join(output_dir, f"detected_{os.path.basename(image_path)}")
+            cv2.imwrite(output_path, visualization)
+            print(f"\nSaved visualization to: {output_path}")
         except Exception as e:
             print(f"Error processing {image_file}: {str(e)}")
             continue
