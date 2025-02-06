@@ -2,47 +2,34 @@
 
 A comprehensive solution for extracting and processing information from South African ID cards using Detectron2 for object detection.
 
-## Current Status (February 5, 2024)
+## Current Status (March 21, 2024)
 
-### Model Performance
-- Average Precision:
+### Object Detection
+- Model: Detectron2 Faster R-CNN
+- Performance:
   * AP (IoU=0.50:0.95): 52.30%
   * AP50 (IoU=0.50): 89.64%
   * AP75 (IoU=0.75): 53.40%
 
-### Best Performing Categories
-- ID Document: 81.81% AP
-- Face: 66.25% AP
-- Nationality: 58.93% AP
-- Names: 51.06% AP
-- Citizenship Status: 49.35% AP
+### OCR Pipeline
+- Implemented Features:
+  * Tesseract OCR integration
+  * Image preprocessing
+  * OCR visualization
+  * Results packaging
+  * Image-only field handling
 
-### Dataset
-- Total Images: 66
-  * Training Set: 52 images
-  * Validation Set: 14 images
-- Format: Variable size, preserving aspect ratio
-- Annotations: COCO JSON format
-- Categories: 15 fields
-
-### Components
-
-#### 1. Object Detection (Completed)
-- Model: Detectron2 Faster R-CNN
-- Backbone: ResNet50-FPN
-- Training:
-  * Batch Size: 8
-  * Learning Rate: 0.001
-  * Iterations: 500
-  * Device: GPU
-
-#### 2. Inference Pipeline (Completed)
-- Features:
-  * GPU acceleration
+- Processing Options:
+  * Single image processing
   * Batch processing
-  * Segment saving
-  * Confidence thresholding
-  * Metadata export
+  * Visualization options
+  * Results export (JSON/MD)
+
+### Output Generation
+- JSON results with field types
+- Markdown summary reports
+- OCR detection visualizations
+- Packaged zip downloads
 
 ## Setup Instructions
 
@@ -91,12 +78,12 @@ project/
 │   ├── model_cfg.yaml
 │   └── metadata.json
 └── dj_dataset/
-    ├── train/
+├── train/
     │   ├── annotations.json
-    │   └── images/
-    └── val/
+│   └── images/
+└── val/
         ├── annotations.json
-        └── images/
+    └── images/
 ```
 
 ## Features
@@ -122,15 +109,58 @@ project/
 - Confidence thresholding
 
 ## Next Steps
-1. 🔄 Optimize performance
-2. 🔄 Enhance OCR integration
-3. 🔄 Create user interface
+1. 🔄 Add PaddleOCR support
+2. 🔄 Enhance OCR accuracy
+3. 🔄 Improve visualization
+4. 🔄 Add confidence scoring
 
 ## License
-[Your License]
+
+MIT License
+
+Copyright (c) 2024 Kwantu
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ## Contributors
-[Your Name/Organization]
+
+### Core Team
+- **DJ Papzin** - *Project Lead & ML Engineer*
+  - Model architecture design
+  - Training pipeline development
+  - OCR integration
+
+- **Abenathi** - *ML Engineer*
+  - Dataset preparation
+  - Model training
+  - Performance optimization
+
+### Organization
+- **Kwantu** - Project Sponsor & Support
+  - Infrastructure support
+  - Dataset provision
+  - Project guidance
+
+### Contact
+For any queries regarding this project, please contact:
+- Email: info@kwantu.com
+- Website: [kwantu.com](https://kwantu.com)
 
 ## Project Components
 
@@ -374,14 +404,6 @@ Note: All operations (training, inference, visualization) are performed directly
 4. Expand dataset size (currently using only 10 images)
 5. Create inference pipeline
 6. Document usage guidelines
-
-## License
-
-[Your License]
-
-## Contributors
-
-[Your Name/Organization]
 
 ## Testing the Model
 
