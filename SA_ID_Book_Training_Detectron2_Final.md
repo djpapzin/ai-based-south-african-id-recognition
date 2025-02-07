@@ -794,6 +794,9 @@ from detectron2.utils.visualizer import Visualizer
 from detectron2.data import MetadataCatalog, DatasetCatalog
 from detectron2.model_zoo import model_zoo
 from pathlib import Path
+import matplotlib.pyplot as plt
+import numpy as np
+from IPython.display import display, clear_output
 
 # Configuration
 DRIVE_ROOT = "/content/drive/MyDrive/Kwantu/Machine Learning"
@@ -804,52 +807,51 @@ INFERENCE_OUTPUT_DIR = os.path.join(DRIVE_ROOT, "inference_output")
 SEGMENTS_DIR = os.path.join(INFERENCE_OUTPUT_DIR, "segments")
 VISUALIZATIONS_DIR = os.path.join(INFERENCE_OUTPUT_DIR, "visualizations")
 
-# Create output directories
-os.makedirs(INFERENCE_OUTPUT_DIR, exist_ok=True)
-os.makedirs(SEGMENTS_DIR, exist_ok=True)
-os.makedirs(VISUALIZATIONS_DIR, exist_ok=True)
+def display_image(image, title=None):
+    """Display an image in the notebook."""
+    plt.figure(figsize=(15, 10))
+    if len(image.shape) == 3:
+        plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    else:
+        plt.imshow(image)
+    if title:
+        plt.title(title)
+    plt.axis('off')
+    plt.show()
 
-# Define categories (must match training categories)
-thing_classes = [
-    'bottom_left_corner', 'bottom_right_corner', 'citizenship_status',
-    'country_of_birth', 'date_of_birth', 'face', 'id_document', 'id_number',
-    'names', 'nationality', 'sex', 'signature', 'surname', 'top_left_corner',
-    'top_right_corner'
-]
-
-def setup_cfg(confidence_threshold=0.5):
-    """Setup inference configuration."""
-    cfg = get_cfg()
-    cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
-    cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(thing_classes)
-    cfg.MODEL.DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-    cfg.MODEL.WEIGHTS = MODEL_PATH
-    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
-    return cfg
-
-def run_inference(image_path, confidence_threshold=0.5, predictor=None):
-    """Run inference on a single image"""
-    if predictor is None:
-        cfg = setup_cfg(confidence_threshold)
-        predictor = DefaultPredictor(cfg)
-
-    print(f"\nRunning inference on {predictor.model.device.type.upper()}")
+def display_detections_and_segments(image, visualization, segments_dict, confidence_threshold=0.5):
+    """Display the original image, detection visualization, and detected segments."""
+    # Create a figure with subplots
+    n_segments = len(segments_dict)
+    n_cols = min(4, n_segments + 2)  # +2 for original and visualization
+    n_rows = (n_segments + n_cols - 1) // n_cols
     
-    # Read image
-    image = cv2.imread(image_path)
-    if image is None:
-        raise ValueError(f"Could not read image at {image_path}")
+    plt.figure(figsize=(20, 5*n_rows))
     
-    # Run inference
-    outputs = predictor(image)
+    # Display original image
+    plt.subplot(n_rows, n_cols, 1)
+    plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    plt.title("Original Image")
+    plt.axis('off')
     
-    # Visualize results
-    v = Visualizer(image[:, :, ::-1],
-                  metadata=MetadataCatalog.get("sa_id_merged_val"),
-                  scale=1.0)
-    out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+    # Display detection visualization
+    plt.subplot(n_rows, n_cols, 2)
+    plt.imshow(cv2.cvtColor(visualization, cv2.COLOR_BGR2RGB))
+    plt.title("Detections")
+    plt.axis('off')
     
-    return image, outputs, out.get_image()[:, :, ::-1]
+    # Display individual segments
+    for idx, (filename, info) in enumerate(segments_dict.items(), start=3):
+        if idx <= n_rows * n_cols:
+            plt.subplot(n_rows, n_cols, idx)
+            segment = cv2.imread(info['segment_path'])
+            plt.imshow(cv2.cvtColor(segment, cv2.COLOR_BGR2RGB))
+            conf = info['confidence'] * 100
+            plt.title(f"{info['class']}\n{conf:.1f}%")
+            plt.axis('off')
+    
+    plt.tight_layout()
+    plt.show()
 
 def process_validation_set(confidence_threshold=0.5):
     """Process all images in the validation set"""
@@ -866,6 +868,12 @@ def process_validation_set(confidence_threshold=0.5):
     predictor = DefaultPredictor(cfg)
     
     all_results = []
+    detection_stats = {
+        'total_detections': 0,
+        'detections_per_class': {},
+        'confidence_per_class': {},
+        'images_with_detections': 0
+    }
     
     for image_file in image_files:
         print(f"\nProcessing: {image_file}")
@@ -883,23 +891,70 @@ def process_validation_set(confidence_threshold=0.5):
             metadata = save_labeled_segments(image, outputs, image_name)
             all_results.append(metadata)
             
+            # Update detection statistics
+            if len(metadata["detections"]) > 0:
+                detection_stats['images_with_detections'] += 1
+                
+            for filename, info in metadata["detections"].items():
+                class_name = info['class']
+                confidence = info['confidence']
+                
+                # Update total detections
+                detection_stats['total_detections'] += 1
+                
+                # Update per-class detection count
+                if class_name not in detection_stats['detections_per_class']:
+                    detection_stats['detections_per_class'][class_name] = 0
+                    detection_stats['confidence_per_class'][class_name] = []
+                detection_stats['detections_per_class'][class_name] += 1
+                detection_stats['confidence_per_class'][class_name].append(confidence)
+            
+            # Display results in notebook
+            segments_info = {}
+            for filename, info in metadata["detections"].items():
+                segment_path = os.path.join(SEGMENTS_DIR, image_name, filename)
+                segments_info[filename] = {
+                    'segment_path': segment_path,
+                    'class': info['class'],
+                    'confidence': info['confidence']
+                }
+            
+            display_detections_and_segments(image, visualization, segments_info, confidence_threshold)
+            
             print(f"✓ Processed {image_file}")
+            print(f"  - Found {len(metadata['detections'])} detections")
             print(f"  - Visualization saved to: {vis_path}")
             print(f"  - Segments saved to: {os.path.join(SEGMENTS_DIR, image_name)}")
             
         except Exception as e:
             print(f"Error processing {image_file}: {str(e)}")
+            continue
+    
+    # Calculate average confidence per class
+    avg_confidence_per_class = {}
+    for class_name, confidences in detection_stats['confidence_per_class'].items():
+        avg_confidence_per_class[class_name] = sum(confidences) / len(confidences)
     
     # Save all results
     results_path = os.path.join(INFERENCE_OUTPUT_DIR, "inference_results.json")
     with open(results_path, 'w') as f:
         json.dump(all_results, f, indent=2)
     
-    print(f"\nProcessing complete!")
+    # Print summary statistics
+    print(f"\nInference Summary:")
     print(f"- Processed {len(image_files)} images")
-    print(f"- Results saved to: {results_path}")
-    print(f"- Visualizations saved to: {VISUALIZATIONS_DIR}")
-    print(f"- Segments saved to: {SEGMENTS_DIR}")
+    print(f"- Images with detections: {detection_stats['images_with_detections']} ({detection_stats['images_with_detections']/len(image_files)*100:.1f}%)")
+    print(f"- Total detections: {detection_stats['total_detections']}")
+    print(f"\nDetections per class:")
+    for class_name, count in sorted(detection_stats['detections_per_class'].items()):
+        avg_conf = avg_confidence_per_class[class_name] * 100
+        print(f"  - {class_name}: {count} detections (avg conf: {avg_conf:.1f}%)")
+    
+    print(f"\nResults saved to:")
+    print(f"- JSON: {results_path}")
+    print(f"- Visualizations: {VISUALIZATIONS_DIR}")
+    print(f"- Segments: {SEGMENTS_DIR}")
+    
     return results_path
 
 def save_labeled_segments(image, outputs, image_name):
@@ -966,17 +1021,22 @@ if __name__ == "__main__":
 ```python
 # Standalone OCR script for SA ID Book segments
 # Requirements:
-# pip install pytesseract pillow
-# Install Tesseract-OCR from: https://github.com/UB-Mannheim/tesseract/wiki
+# !apt-get install tesseract-ocr -y
+# !pip install pytesseract pillow matplotlib
 
 import os
 import json
+import cv2
+import numpy as np
 from PIL import Image
 from datetime import datetime
 import pytesseract
+import matplotlib.pyplot as plt
+from IPython.display import display, clear_output
 
-# Configure Tesseract path (modify for your system)
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# Install Tesseract OCR if not already installed
+!apt-get update
+!apt-get install tesseract-ocr -y
 
 # Configuration
 DRIVE_ROOT = "/content/drive/MyDrive/Kwantu/Machine Learning"
@@ -987,11 +1047,70 @@ OCR_OUTPUT_DIR = os.path.join(INFERENCE_OUTPUT_DIR, "ocr_results")
 # Create output directory
 os.makedirs(OCR_OUTPUT_DIR, exist_ok=True)
 
+def display_ocr_results(image_path, field_type, text, confidence):
+    """Display the segment image with its OCR result."""
+    # Read and convert image
+    image = cv2.imread(image_path)
+    if image is None:
+        print(f"Could not read image: {image_path}")
+        return
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    
+    # Create figure
+    plt.figure(figsize=(10, 4))
+    
+    # Display image
+    plt.subplot(1, 1, 1)
+    plt.imshow(image_rgb)
+    plt.title(f"{field_type}\nConfidence: {confidence*100:.1f}%\nText: {text}")
+    plt.axis('off')
+    
+    plt.tight_layout()
+    plt.show()
+
+def display_document_ocr_results(doc_path, results):
+    """Display all OCR results for a document."""
+    fields = results['fields']
+    n_fields = len(fields)
+    
+    if n_fields == 0:
+        print("No fields detected in this document.")
+        return
+    
+    # Calculate grid dimensions
+    n_cols = min(3, n_fields)
+    n_rows = (n_fields + n_cols - 1) // n_cols
+    
+    plt.figure(figsize=(6*n_cols, 4*n_rows))
+    
+    for idx, (field_type, info) in enumerate(fields.items(), 1):
+        image_path = os.path.join(doc_path, info['segment_file'])
+        if os.path.exists(image_path):
+            # Read and convert image
+            image = cv2.imread(image_path)
+            if image is not None:
+                image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                
+                # Create subplot
+                plt.subplot(n_rows, n_cols, idx)
+                plt.imshow(image_rgb)
+                plt.title(f"{field_type}\nConfidence: {info['confidence']*100:.1f}%\nText: {info['text']}")
+                plt.axis('off')
+    
+    plt.tight_layout()
+    plt.show()
+
 def process_segments_with_ocr():
     """Process all segmented images with OCR and save results."""
     print("\nProcessing segments with OCR...")
     
     results = {}
+    ocr_stats = {
+        'total_fields': 0,
+        'fields_per_type': {},
+        'confidence_per_type': {},
+        'successful_extractions': 0
+    }
     
     # Process each image directory (one per ID document)
     for doc_dir in os.listdir(SEGMENTS_DIR):
@@ -1013,58 +1132,94 @@ def process_segments_with_ocr():
             results[doc_dir]['detection_metadata'] = detection_metadata
         
         # Process each segment in the document directory
-        for filename in os.listdir(doc_path):
-        if not filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-            continue
-            
+        segments_to_process = [f for f in os.listdir(doc_path) 
+                             if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+        
+        for filename in segments_to_process:
             # Extract field type from filename
             field_type = os.path.splitext(filename)[0].split('_')[0]
             
-    # Read image
+            # Read image
             image_path = os.path.join(doc_path, filename)
             try:
-            image = Image.open(image_path)
-            
-            # Configure OCR settings based on field type
-            config = ''
-            if field_type == 'id_number':
-                config = '--psm 7 -c tessedit_char_whitelist=0123456789'
+                image = Image.open(image_path)
+                
+                # Configure OCR settings based on field type
+                config = ''
+                if field_type == 'id_number':
+                    config = '--psm 7 -c tessedit_char_whitelist=0123456789'
                 elif field_type in ['date_of_birth']:
-                config = '--psm 7 -c tessedit_char_whitelist=0123456789/'
-            else:
-                config = '--psm 7'
-            
-            # Perform OCR
-            text = pytesseract.image_to_string(image, config=config).strip()
-            
-            # Store results
+                    config = '--psm 7 -c tessedit_char_whitelist=0123456789/'
+                else:
+                    config = '--psm 7'
+                
+                # Perform OCR
+                text = pytesseract.image_to_string(image, config=config).strip()
+                confidence = detection_metadata['detections'].get(filename, {}).get('confidence', 0)
+                
+                # Store results
                 results[doc_dir]['fields'][field_type] = {
-                'text': text,
+                    'text': text,
                     'segment_file': filename,
-                    'confidence': detection_metadata['detections'].get(filename, {}).get('confidence', None)
-            }
-            
+                    'confidence': confidence
+                }
+                
+                # Update statistics
+                ocr_stats['total_fields'] += 1
+                if text:  # If text was extracted
+                    ocr_stats['successful_extractions'] += 1
+                
+                if field_type not in ocr_stats['fields_per_type']:
+                    ocr_stats['fields_per_type'][field_type] = 0
+                    ocr_stats['confidence_per_type'][field_type] = []
+                ocr_stats['fields_per_type'][field_type] += 1
+                ocr_stats['confidence_per_type'][field_type].append(confidence)
+                
+                # Display individual result
+                display_ocr_results(image_path, field_type, text, confidence)
+                
                 print(f"✓ {field_type}: {text}")
-            
-        except Exception as e:
+                
+            except Exception as e:
                 print(f"Error processing {image_path}: {str(e)}")
+                continue
+        
+        # Display all results for this document
+        print(f"\nAll fields for document {doc_dir}:")
+        display_document_ocr_results(doc_path, results[doc_dir])
+    
+    # Calculate average confidence per field type
+    avg_confidence_per_type = {}
+    for field_type, confidences in ocr_stats['confidence_per_type'].items():
+        if confidences:  # Check if there are any confidences to average
+            avg_confidence_per_type[field_type] = sum(confidences) / len(confidences)
     
     # Save results to JSON
     output_json = os.path.join(OCR_OUTPUT_DIR, "ocr_results.json")
     with open(output_json, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
     
-    print(f"\nOCR processing complete!")
-    print(f"Results saved to: {output_json}")
+    # Print summary statistics
+    print(f"\nOCR Processing Summary:")
+    print(f"- Processed {len(results)} documents")
+    print(f"- Total fields processed: {ocr_stats['total_fields']}")
+    if ocr_stats['total_fields'] > 0:  # Avoid division by zero
+        success_rate = (ocr_stats['successful_extractions'] / ocr_stats['total_fields']) * 100
+        print(f"- Successful extractions: {ocr_stats['successful_extractions']} ({success_rate:.1f}%)")
+    else:
+        print("- No fields were processed")
+    
+    print(f"\nResults per field type:")
+    for field_type, count in sorted(ocr_stats['fields_per_type'].items()):
+        if field_type in avg_confidence_per_type:
+            avg_conf = avg_confidence_per_type[field_type] * 100
+            print(f"  - {field_type}: {count} fields (avg conf: {avg_conf:.1f}%)")
+        else:
+            print(f"  - {field_type}: {count} fields (no confidence data)")
+    
+    print(f"\nResults saved to: {output_json}")
     return results
 
 if __name__ == "__main__":
     # Process segments from inference output
     results = process_segments_with_ocr()
-    
-    # Print sample results
-print("\nSample OCR Results:")
-    for doc_id, data in list(results.items())[:2]:  # Show first 2 documents
-        print(f"\nDocument: {doc_id}")
-    for field, info in data['fields'].items():
-            print(f"- {field}: {info['text']}")
