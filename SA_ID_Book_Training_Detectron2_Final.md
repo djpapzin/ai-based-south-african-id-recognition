@@ -585,24 +585,29 @@ class CocoTrainer(DefaultTrainer):
         # Build test loader
         data_loader = cls.build_test_loader(cfg, cfg.DATASETS.TEST[0])
         
-        # Put model in eval mode
+        # Store original training mode and set to eval mode
+        training_mode = model.training
         model.eval()
         results = {}
         
-        with torch.no_grad():
-            for evaluator in evaluators:
-                # Initialize evaluator
-                evaluator.reset()
-                
-                # Run inference
-                for idx, inputs in enumerate(data_loader):
-                    outputs = model(inputs)
-                    evaluator.process(inputs, outputs)
-                
-                # Evaluate predictions
-                results_i = evaluator.evaluate()
-                if results_i is not None:
-                    results.update(results_i)
+        try:
+            with torch.no_grad():
+                for evaluator in evaluators:
+                    # Initialize evaluator
+                    evaluator.reset()
+                    
+                    # Run inference
+                    for idx, inputs in enumerate(data_loader):
+                        outputs = model(inputs)
+                        evaluator.process(inputs, outputs)
+                    
+                    # Evaluate predictions
+                    results_i = evaluator.evaluate()
+                    if results_i is not None:
+                        results.update(results_i)
+        finally:
+            # Restore original training mode
+            model.train(training_mode)
         
         return results
 
