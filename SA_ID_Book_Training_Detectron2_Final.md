@@ -555,6 +555,7 @@ class CocoTrainer(DefaultTrainer):
     def build_evaluator(cls, cfg, dataset_name, output_folder=None):
         if output_folder is None:
             output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
+        os.makedirs(output_folder, exist_ok=True)
         return COCOEvaluator(dataset_name, cfg, True, output_folder)
     
     def build_hooks(self):
@@ -564,47 +565,44 @@ class CocoTrainer(DefaultTrainer):
             hooks_list.append(
                 hooks.EvalHook(
                     self.cfg.TEST.EVAL_PERIOD,
-                    lambda: self.test(self.cfg, self.model),
+                    self.test,
                     self.cfg.DATASETS.TEST[0]
                 )
             )
         return hooks_list
     
     @classmethod
-    def test(cls, cfg, model):
+    def test(cls, cfg, model, evaluators=None):
         """Run model evaluation on test/validation set."""
-        evaluators = [
-            cls.build_evaluator(
-                cfg, name, output_folder=os.path.join(cfg.OUTPUT_DIR, "inference")
-            )
-            for name in cfg.DATASETS.TEST
-        ]
-        res = cls.test_with_evaluators(model, evaluators)
-        return res
-    
-    @classmethod
-    def test_with_evaluators(cls, model, evaluators):
-        """Run evaluation with the specified evaluators."""
-        results = {}
+        if evaluators is None:
+            evaluators = [
+                cls.build_evaluator(
+                    cfg, name, output_folder=os.path.join(cfg.OUTPUT_DIR, "inference", name)
+                )
+                for name in cfg.DATASETS.TEST
+            ]
+        
+        res = {}
         for evaluator in evaluators:
-            results.update(evaluator.evaluate(model))
-        return results
-    
-    @classmethod
-    def test_with_TTA(cls, cfg, model):
-        """Run inference with test-time augmentation."""
-        logger = logging.getLogger("detectron2.trainer")
-        # In the end of training, run an evaluation with TTA
-        logger.info("Running inference with test-time augmentation ...")
-        model = GeneralizedRCNNWithTTA(cfg, model)
-        evaluators = [
-            cls.build_evaluator(
-                cfg, name, output_folder=os.path.join(cfg.OUTPUT_DIR, "inference_TTA")
-            )
-            for name in cfg.DATASETS.TEST
-        ]
-        res = cls.test(cfg, model, evaluators)
-        res = OrderedDict({k + "_TTA": v for k, v in res.items()})
+            # Model should be in eval mode
+            model.eval()
+            with torch.no_grad():
+                # Initialize predictions list
+                evaluator._predictions = []
+                
+                # Get validation dataset
+                data_loader = cls.build_test_loader(cfg, cfg.DATASETS.TEST[0])
+                
+                # Run inference
+                for idx, inputs in enumerate(data_loader):
+                    outputs = model(inputs)
+                    evaluator.process(inputs, outputs)
+            
+            # Evaluate predictions
+            results = evaluator.evaluate()
+            if results is not None:
+                res.update(results)
+        
         return res
 
 def setup_cfg(train_dataset_name, val_dataset_name, num_classes, output_dir):
@@ -634,7 +632,7 @@ def setup_cfg(train_dataset_name, val_dataset_name, num_classes, output_dir):
     # Evaluation settings
     cfg.TEST.EVAL_PERIOD = 500
     cfg.TEST.DETECTIONS_PER_IMAGE = 100  # Increased from default
-    
+
     # Model config
     cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512
     cfg.MODEL.ROI_HEADS.NUM_CLASSES = num_classes

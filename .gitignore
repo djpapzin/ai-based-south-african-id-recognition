@@ -1,10 +1,20 @@
 # Ignore model files but keep directory structure
+models/*
+!models/.gitkeep
 ocr_models/*
 !ocr_models/.gitkeep
+detectron2/
+
+# Output directories
+outputs/
+detected_segments/
+test_images/*
+!test_images/.gitkeep
 
 # Virtual Environment
 .venv/
 ENV/
+detectron2_env/
 
 # Python-related files
 __pycache__/
@@ -30,6 +40,7 @@ wheels/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+*.ipynb
 
 # IDEs and editors
 .idea/
@@ -43,60 +54,23 @@ results/
 *.log
 *.json
 *.cfg
+*.pth
+*.h5
+*.pkl
+*.onnx
+*.pb
+*.tflite
+*.mlmodel
 
 # ID Images directory - track directory but not contents
 IDcopies/*
 !IDcopies/.gitkeep
 idcopiesOld/*
-idcopiesOld/.gitkeep
-annotated_images/*
-annotated_images/.gitkeep
+!idcopiesOld/.gitkeep
 
-# Dataset files
-dataset1.zip
-dataset2.zip
-merged_dataset_final.zip
-colab_dataset.zip
-
-# Data directories
-abenathi_data/
-cleaned_data/
-colab_dataset/
-merged_dataset/
-merged_output/
-
-# Environment and temporary files
-.env
-labelstudio-temp/
-labelstudio_data/
-abenathi_object_detection_dataset/
-dj_object_detection_dataset/
-merged_object_detection_dataset/
-backup_scripts/
-
-# Model files and datasets
-*.pth
-*.h5
-*.hdf5
-*.pkl
-*.model
-model_output/
-logs/
-tensorboard_logs/
-runs/
-
-# Dataset
-images/
-*.jpg
-*.jpeg
-*.png
-*.gif
-*.tif
-*.tiff
-
-# Misc
-.DS_Store
-.env.local
-.env.*.local
-detected_segments/
-outputs/
+# Large files
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
