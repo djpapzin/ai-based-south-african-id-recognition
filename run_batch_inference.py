@@ -6,6 +6,29 @@ from paddleocr import PaddleOCR
 import cv2
 from local_inference import run_inference, save_segments
 
+def format_results(results):
+    """Format the results into a readable text format."""
+    output = []
+    output.append(f"File name: {results['image_path']}")
+    output.append(f"Classification: {'New' if results['classification']['document_type'] == 'new_id' else 'Old'} ID")
+    output.append(f"Confidence: {results['classification']['confidence']:.2f}")
+    output.append("\nSegmented Files and OCR Results:")
+    output.append("-" * 50)
+    
+    # Process each segment that has OCR results
+    for segment in results['segments']['segments']:
+        if 'paddle_ocr' in segment or 'tesseract_ocr' in segment:
+            output.append(f"\nLabel: {segment['label']}")
+            output.append(f"Segment File: {segment['segment_path']}")
+            output.append(f"Confidence: {segment['confidence']:.2f}")
+            if 'tesseract_ocr' in segment:
+                output.append(f"Tesseract OCR: {segment['tesseract_ocr']}")
+            if 'paddle_ocr' in segment:
+                output.append(f"Paddle OCR: {segment['paddle_ocr']}")
+            output.append("-" * 30)
+    
+    return "\n".join(output)
+
 def main():
     # Initialize the classifier and OCR
     model_path = "models/model_final.pth"
@@ -55,7 +78,7 @@ def main():
                 "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S")
             }
             
-            # Save combined results
+            # Save combined results as JSON
             output_dir = "outputs/classified"
             os.makedirs(output_dir, exist_ok=True)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -63,13 +86,24 @@ def main():
             
             with open(result_file, 'w') as f:
                 json.dump(results, f, indent=2)
+            
+            # Create and save formatted text output
+            text_output_dir = "outputs/text_results"
+            os.makedirs(text_output_dir, exist_ok=True)
+            text_result_file = os.path.join(text_output_dir, f"{os.path.splitext(image_file)[0]}_{timestamp}.txt")
+            
+            formatted_text = format_results(results)
+            with open(text_result_file, 'w') as f:
+                f.write(formatted_text)
                 
-            print(f"Results saved to: {result_file}")
+            print(f"Results saved to:")
+            print(f"- JSON: {result_file}")
+            print(f"- Text: {text_result_file}")
             
         except Exception as e:
             print(f"\nError processing {image_file}: {str(e)}")
     
-    print("\nProcessing complete. Results saved in outputs/classified/")
+    print("\nProcessing complete. Results saved in outputs/classified/ and outputs/text_results/")
 
 if __name__ == "__main__":
     main()
