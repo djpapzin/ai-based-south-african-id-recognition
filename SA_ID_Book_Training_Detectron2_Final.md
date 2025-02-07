@@ -563,11 +563,31 @@ class CocoTrainer(DefaultTrainer):
         hooks_list.append(
             hooks.EvalHook(
                 self.cfg.TEST.EVAL_PERIOD,
-                self.test,
+                lambda: self.test(self.cfg, self.model),
                 self.cfg.DATASETS.TEST[0]
             )
         )
         return hooks_list
+    
+    @classmethod
+    def test(cls, cfg, model):
+        """Run model evaluation on test/validation set."""
+        evaluators = [
+            cls.build_evaluator(
+                cfg, name, output_folder=os.path.join(cfg.OUTPUT_DIR, "inference")
+            )
+            for name in cfg.DATASETS.TEST
+        ]
+        res = cls.test_with_evaluators(model, evaluators)
+        return res
+    
+    @classmethod
+    def test_with_evaluators(cls, model, evaluators):
+        """Run evaluation with the specified evaluators."""
+        results = {}
+        for evaluator in evaluators:
+            results.update(evaluator.evaluate(model))
+        return results
     
     @classmethod
     def test_with_TTA(cls, cfg, model):
