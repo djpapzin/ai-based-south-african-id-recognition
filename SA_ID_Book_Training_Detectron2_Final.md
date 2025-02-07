@@ -559,15 +559,14 @@ class CocoTrainer(DefaultTrainer):
     
     def build_hooks(self):
         hooks_list = super().build_hooks()
-        # # Enable this during full training
-        # # Add evaluation hook for periodic validation
-        # hooks_list.append(
-        #     hooks.EvalHook(
-        #         self.cfg.TEST.EVAL_PERIOD,
-        #         self.test,
-        #         self.cfg.DATASETS.TEST[0]
-        #     )
-        # )
+        # Enable evaluation hook for periodic validation
+        hooks_list.append(
+            hooks.EvalHook(
+                self.cfg.TEST.EVAL_PERIOD,
+                self.test,
+                self.cfg.DATASETS.TEST[0]
+            )
+        )
         return hooks_list
     
     @classmethod
@@ -601,27 +600,27 @@ def setup_cfg(train_dataset_name, val_dataset_name, num_classes, output_dir):
     cfg.DATASETS.TRAIN = (train_dataset_name,)
     cfg.DATASETS.TEST = (val_dataset_name,)
 
-    # Quick test training parameters
-    # NOTE: For full training, increase these values:
-    # - MAX_ITER to 2000
-    # - STEPS to (1000, 1500)
-    # - CHECKPOINT_PERIOD to 500
-    # - WARMUP_ITERS to 100
-    # - TEST.EVAL_PERIOD to 500
+    # Training parameters for full training
     cfg.SOLVER.IMS_PER_BATCH = 4  # Adjust based on GPU memory
-    cfg.SOLVER.BASE_LR = 0.00025  # Standard learning rate for Faster R-CNN
-    cfg.SOLVER.MAX_ITER = 200     # Quick test - increase to 2000 for full training
-    cfg.SOLVER.STEPS = (100, 150) # Quick test - increase to (1000, 1500) for full training
-    cfg.SOLVER.CHECKPOINT_PERIOD = 100  # Quick test - increase to 500 for full training
-    cfg.SOLVER.WARMUP_ITERS = 20  # Quick test - increase to 100 for full training
+    cfg.SOLVER.BASE_LR = 0.001  # Increased learning rate
+    cfg.SOLVER.MAX_ITER = 2000  # Increased iterations
+    cfg.SOLVER.STEPS = (1000, 1500)  # Adjusted steps for LR decay
+    cfg.SOLVER.CHECKPOINT_PERIOD = 500
+    cfg.SOLVER.WARMUP_ITERS = 100
+    cfg.SOLVER.WARMUP_FACTOR = 1.0 / 1000
+    cfg.SOLVER.GAMMA = 0.1  # Factor for LR decay
 
     # Evaluation settings
-    cfg.TEST.EVAL_PERIOD = 100    # Quick test - increase to 500 for full training
-
+    cfg.TEST.EVAL_PERIOD = 500
+    cfg.TEST.DETECTIONS_PER_IMAGE = 100  # Increased from default
+    
     # Model config
     cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512
     cfg.MODEL.ROI_HEADS.NUM_CLASSES = num_classes
-    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.05  # Lowered threshold for testing
+    cfg.MODEL.RPN.PRE_NMS_TOPK_TEST = 6000
+    cfg.MODEL.RPN.POST_NMS_TOPK_TEST = 1000
+    cfg.MODEL.RPN.NMS_THRESH = 0.7
 
     # Initialize new layers properly
     cfg.MODEL.ROI_HEADS.NAME = "StandardROIHeads"
@@ -630,7 +629,7 @@ def setup_cfg(train_dataset_name, val_dataset_name, num_classes, output_dir):
     cfg.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION = 7
 
     # Input config
-    cfg.INPUT.MIN_SIZE_TRAIN = (640, 672, 704)  # Reduced size range for quick test
+    cfg.INPUT.MIN_SIZE_TRAIN = (640, 672, 704, 736, 768, 800)  # More size variation
     cfg.INPUT.MAX_SIZE_TRAIN = 1333
     cfg.INPUT.MIN_SIZE_TEST = 800
     cfg.INPUT.MAX_SIZE_TEST = 1333
@@ -642,7 +641,7 @@ def setup_cfg(train_dataset_name, val_dataset_name, num_classes, output_dir):
 
     # GPU settings
     cfg.MODEL.DEVICE = "cuda"
-    
+
     # Output config
     cfg.OUTPUT_DIR = output_dir
     os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
