@@ -776,10 +776,11 @@ print(f"- Nationality: {57.21:.2f}% AP")
 ```python
 # Standalone inference script for SA ID Book Detection
 # Requirements:
-# pip install torch torchvision
-# pip install 'git+https://github.com/facebookresearch/detectron2.git'
-# pip install opencv-python-headless
+# !pip install torch torchvision
+# !pip install 'git+https://github.com/facebookresearch/detectron2.git'
+# !pip install opencv-python-headless
 
+# Import Libraries
 import os
 import cv2
 import torch
@@ -824,17 +825,13 @@ def setup_cfg(confidence_threshold=0.5):
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
     return cfg
 
-def run_inference(image_path, confidence_threshold=0.5, cfg=None):
+def run_inference(image_path, confidence_threshold=0.5, predictor=None):
     """Run inference on a single image"""
-    if cfg is None:
+    if predictor is None:
         cfg = setup_cfg(confidence_threshold)
-    
-    print(f"\nRunning inference on {cfg.MODEL.DEVICE.upper()}")
-    
-    # Initialize model
-    model = build_model(cfg)
-    DetectionCheckpointer(model).load(cfg.MODEL.WEIGHTS)
-    model.eval()
+        predictor = DefaultPredictor(cfg)
+
+    print(f"\nRunning inference on {predictor.model.device.upper()}")
     
     # Read image
     image = cv2.imread(image_path)
@@ -842,12 +839,7 @@ def run_inference(image_path, confidence_threshold=0.5, cfg=None):
         raise ValueError(f"Could not read image at {image_path}")
     
     # Run inference
-    with torch.no_grad():
-        # Convert image to format expected by the model
-        height, width = image.shape[:2]
-        image_tensor = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
-        inputs = {"image": image_tensor, "height": height, "width": width}
-        outputs = model([inputs])[0]
+    outputs = predictor(image)
     
     # Visualize results
     v = Visualizer(image[:, :, ::-1],
@@ -867,13 +859,9 @@ def process_validation_set(confidence_threshold=0.5):
     
     print(f"Found {len(image_files)} images to process")
     
-    # Setup configuration once
+    # Setup configuration and predictor once
     cfg = setup_cfg(confidence_threshold)
-    
-    # Initialize model only once
-    model = build_model(cfg)
-    DetectionCheckpointer(model).load(cfg.MODEL.WEIGHTS)
-    model.eval()
+    predictor = DefaultPredictor(cfg)
     
     all_results = []
     
@@ -881,26 +869,12 @@ def process_validation_set(confidence_threshold=0.5):
         print(f"\nProcessing: {image_file}")
         image_path = os.path.join(VAL_IMAGES_DIR, image_file)
         try:
-            # Run inference using the initialized model
-            image = cv2.imread(image_path)
-            if image is None:
-                raise ValueError(f"Could not read image at {image_path}")
-            
-            with torch.no_grad():
-                height, width = image.shape[:2]
-                image_tensor = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
-                inputs = {"image": image_tensor, "height": height, "width": width}
-                outputs = model([inputs])[0]
-            
-            # Visualize results
-            v = Visualizer(image[:, :, ::-1],
-                         metadata=MetadataCatalog.get("sa_id_merged_val"),
-                         scale=1.0)
-            visualization = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+            # Run inference using the initialized predictor
+            image, outputs, visualization = run_inference(image_path, confidence_threshold, predictor)
             
             # Save visualization
             vis_path = os.path.join(VISUALIZATIONS_DIR, f"detected_{image_file}")
-            cv2.imwrite(vis_path, visualization.get_image()[:, :, ::-1])
+            cv2.imwrite(vis_path, visualization)
             
             # Save segments and get metadata
             image_name = os.path.splitext(image_file)[0]
