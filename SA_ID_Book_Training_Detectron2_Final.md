@@ -539,7 +539,9 @@ verify_dataset()
 
 ## 7. Training Configuration and Model Training
 
-```python
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+
 import os
 import json
 import logging
@@ -831,7 +833,7 @@ def run_inference(image_path, confidence_threshold=0.5, predictor=None):
         cfg = setup_cfg(confidence_threshold)
         predictor = DefaultPredictor(cfg)
 
-    print(f"\nRunning inference on {predictor.model.device.upper()}")
+    print(f"\nRunning inference on {predictor.model.device.type.upper()}")
     
     # Read image
     image = cv2.imread(image_path)
