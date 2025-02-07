@@ -16,6 +16,8 @@ if os.path.exists('/content/drive'):
 print("Mounting Google Drive...")
 drive.mount('/content/drive')
 
+## 2. Setup Dataset Paths and Directories
+
 # Verify the dataset directories exist
 print("\nVerifying paths...")
 DRIVE_ROOT = "/content/drive/MyDrive/Kwantu/Machine Learning"
@@ -50,6 +52,8 @@ def prepare_dataset_structure():
     for directory in directories:
         os.makedirs(directory, exist_ok=True)
         print(f"✓ Created directory: {directory}")
+
+## 3. Dataset Processing and Merging
 
 def verify_and_fix_image_dimensions(coco_data, images_dir):
     """Verify and fix image dimensions in COCO annotations."""
@@ -182,6 +186,15 @@ def process_label_studio_export():
     for ann in dj_data['annotations']:
         ann['category_id'] = category_id_map[ann['category_id']]
     
+    # Clean up file paths in both datasets
+    for img in dj_data['images']:
+        # Remove any 'images/' prefix and normalize path
+        img['file_name'] = os.path.basename(img['file_name'].replace('\\', '/'))
+    
+    for img in abenathi_data['images']:
+        # Remove any 'images/' prefix and normalize path
+        img['file_name'] = os.path.basename(img['file_name'].replace('\\', '/'))
+    
     # Fix image dimensions and clean up paths for both datasets
     dj_data = verify_and_fix_image_dimensions(dj_data, DJ_IMAGES_DIR)
     abenathi_data = verify_and_fix_image_dimensions(abenathi_data, ABENATHI_IMAGES_DIR)
@@ -201,9 +214,28 @@ def process_label_studio_export():
     # Verify all images exist
     missing_images = []
     for img in merged_data['images']:
-        img_path = os.path.join(DJ_IMAGES_DIR if 'dj_dataset' in img['file_name'] else ABENATHI_IMAGES_DIR,
-                              os.path.basename(img['file_name'].replace('\\', '/')))
-        if not os.path.exists(img_path):
+        # Try both .jpg and .jpeg extensions
+        base_name = os.path.splitext(img['file_name'])[0]
+        found = False
+        
+        # Check in DJ dataset
+        for ext in ['.jpg', '.jpeg']:
+            img_path = os.path.join(DJ_IMAGES_DIR, base_name + ext)
+            if os.path.exists(img_path):
+                img['file_name'] = base_name + ext
+                found = True
+                break
+        
+        # If not found in DJ dataset, check in Abenathi dataset
+        if not found:
+            for ext in ['.jpg', '.jpeg']:
+                img_path = os.path.join(ABENATHI_IMAGES_DIR, base_name + ext)
+                if os.path.exists(img_path):
+                    img['file_name'] = base_name + ext
+                    found = True
+                    break
+        
+        if not found:
             missing_images.append(img['file_name'])
     
     if missing_images:
@@ -247,15 +279,17 @@ def process_label_studio_export():
         split_filenames = [img['file_name'] for img in split_data['images']]
         copied_count = 0
         for img_file in split_filenames:
-            # Determine source directory based on dataset
-            src_dir = DJ_IMAGES_DIR if 'dj_dataset' in img_file else ABENATHI_IMAGES_DIR
-            src = os.path.join(src_dir, os.path.basename(img_file.replace('\\', '/')))
-            dst = os.path.join(split_dir, "images", os.path.basename(img_file.replace('\\', '/')))
+            # Try both datasets
+            src = os.path.join(DJ_IMAGES_DIR, img_file)
+            if not os.path.exists(src):
+                src = os.path.join(ABENATHI_IMAGES_DIR, img_file)
+            
+            dst = os.path.join(split_dir, "images", img_file)
             if os.path.exists(src):
                 shutil.copy2(src, dst)
                 copied_count += 1
             else:
-                print(f"Warning: Could not find image {src}")
+                print(f"Warning: Could not find image {img_file}")
         
         print(f"✓ Copied {copied_count}/{len(split_filenames)} images for {split_name}")
         print(f"✓ Split contains {len(split_data['images'])} images and {len(split_data['annotations'])} annotations")
