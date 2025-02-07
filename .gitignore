@@ -98,3 +98,5 @@ images/
 .DS_Store
 .env.local
 .env.*.local
+detected_segments/
+outputs/
