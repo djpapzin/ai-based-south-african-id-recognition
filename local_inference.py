@@ -199,89 +199,126 @@ def save_segments(image_path, outputs, save_dir, classification_result=None):
         # Save detection and classification results
         results = outputs.get("results", {})
         results["image_path"] = image_path
-        results["segments"] = []
+        results["segments"] = {
+            "directory": segments_dir,
+            "segments": []
+        }
         
-        # Add classification results if provided
-        if classification_result:
-            results["classification"] = classification_result
-            # Save classification result to a separate text file
-            class_txt_path = os.path.join(segments_dir, "classification_result.txt")
-            with open(class_txt_path, 'w', encoding='utf-8') as f:
-                f.write(f"Document Classification:\n")
-                f.write(f"Type: {classification_result['document_type']}\n")
-                f.write(f"Confidence: {classification_result['confidence']:.2%}\n")
-                f.write("-" * 50 + "\n")
-        
-        print("\nDetected Segments:")
-        print("-" * 50)
-        
-        # Process each detection
+        # Process each detected segment
         for i, (box, class_id, score) in enumerate(zip(boxes, classes, scores)):
-            # Get coordinates
-            x1, y1, x2, y2 = box.astype(int)
-            
-            # Get class label
+            # Get field label
             label = thing_classes[class_id]
             
-            # Crop segment
+            # Convert box coordinates to integers
+            x1, y1, x2, y2 = map(int, box)
+            
+            # Crop segment from image
             segment = image[y1:y2, x1:x2]
             
+            # Generate base filename without extension
+            base_filename = f"{label}_{i+1}"
+            
             # Save segment image
-            segment_filename = f"{label}_{i}.jpg"
-            segment_path = os.path.join(segments_dir, segment_filename)
+            segment_path = os.path.join(segments_dir, f"{base_filename}.jpg")
             cv2.imwrite(segment_path, segment)
             
-            # Process with OCR and save results
+            # Process with OCR
             ocr_results = process_segment_with_ocr(segment, label)
             
-            # Save OCR results to text file if not a skipped label
-            if label not in ['face', 'signature', 'id_document']:
-                txt_filename = f"{label}_{i}.txt"
-                txt_path = os.path.join(segments_dir, txt_filename)
-                with open(txt_path, 'w', encoding='utf-8') as f:
-                    if classification_result:
-                        f.write(f"Document Classification:\n")
-                        f.write(f"Type: {classification_result['document_type']}\n")
-                        f.write(f"Confidence: {classification_result['confidence']:.2%}\n")
-                        f.write("-" * 50 + "\n\n")
-                    f.write(f"Field: {label}\n")
-                    f.write(f"PaddleOCR Result:\n{ocr_results['paddle_ocr']}\n\n")
-                    f.write(f"Tesseract Result:\n{ocr_results['tesseract_ocr']}")
+            # Clean OCR results
+            cleaned_paddle = clean_text(ocr_results['paddle_ocr'], label)
+            cleaned_tesseract = clean_text(ocr_results['tesseract_ocr'], label)
             
-            # Print detection info
-            print(f"Label: {label}")
-            print(f"Confidence: {score:.2%}")
-            if label not in ['face', 'signature', 'id_document']:
-                print(f"PaddleOCR: {ocr_results['paddle_ocr']}")
-                print(f"Tesseract: {ocr_results['tesseract_ocr']}")
-            print("-" * 50)
+            # Create OCR results text file
+            ocr_text_path = os.path.join(segments_dir, f"{base_filename}.txt")
+            with open(ocr_text_path, 'w', encoding='utf-8') as f:
+                f.write(f"Field: {label}\n")
+                f.write(f"Confidence: {score:.2%}\n")
+                f.write("\nPaddleOCR Result:\n")
+                f.write(f"Raw: {ocr_results['paddle_ocr']}\n")
+                f.write(f"Cleaned: {cleaned_paddle}\n")
+                f.write("\nTesseract Result:\n")
+                f.write(f"Raw: {ocr_results['tesseract_ocr']}\n")
+                f.write(f"Cleaned: {cleaned_tesseract}\n")
             
             # Add to results
             segment_info = {
                 "label": label,
                 "confidence": float(score),
-                "coordinates": box.tolist(),
-                "segment_path": segment_path
+                "segment_path": segment_path,
+                "ocr_text_path": ocr_text_path,
+                "coordinates": {
+                    "x1": int(x1),
+                    "y1": int(y1),
+                    "x2": int(x2),
+                    "y2": int(y2)
+                },
+                "paddle_ocr": cleaned_paddle,
+                "tesseract_ocr": cleaned_tesseract
             }
+            results["segments"]["segments"].append(segment_info)
             
-            if label not in ['face', 'signature', 'id_document']:
-                segment_info.update({
-                    "paddle_ocr": ocr_results['paddle_ocr'],
-                    "tesseract_ocr": ocr_results['tesseract_ocr']
-                })
-            
-            results["segments"].append(segment_info)
-        
-        # Save results to JSON
-        results_file = os.path.join(segments_dir, "detection_results.json")
-        with open(results_file, 'w') as f:
-            json.dump(results, f, indent=2)
+            # Create HTML preview file for easy viewing
+            html_path = os.path.join(segments_dir, "preview.html")
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write("""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Segment Results</title>
+                    <style>
+                        .segment-container { 
+                            display: flex; 
+                            margin-bottom: 20px;
+                            border: 1px solid #ccc;
+                            padding: 10px;
+                            border-radius: 5px;
+                        }
+                        .segment-image { 
+                            max-width: 300px; 
+                            margin-right: 20px;
+                        }
+                        .segment-text {
+                            font-family: monospace;
+                            white-space: pre-wrap;
+                        }
+                        h2 { color: #333; }
+                        .confidence { color: #0066cc; }
+                    </style>
+                </head>
+                <body>
+                    <h1>ID Document Segments and OCR Results</h1>
+                """)
+                
+                # Add each segment to the HTML
+                for segment in results["segments"]["segments"]:
+                    rel_img_path = os.path.relpath(segment["segment_path"], segments_dir)
+                    with open(segment["ocr_text_path"], 'r', encoding='utf-8') as txt:
+                        ocr_content = txt.read()
+                    
+                    f.write(f"""
+                    <div class="segment-container">
+                        <div>
+                            <h2>{segment["label"]}</h2>
+                            <img src="{rel_img_path}" class="segment-image">
+                        </div>
+                        <div class="segment-text">
+                            <p class="confidence">Confidence: {segment["confidence"]:.2%}</p>
+                            <pre>{ocr_content}</pre>
+                        </div>
+                    </div>
+                    """)
+                
+                f.write("""
+                </body>
+                </html>
+                """)
         
         return results
-    
+        
     except Exception as e:
         print(f"Error saving segments: {str(e)}")
-        return None
+        return {"error": str(e)}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run local inference on ID documents')
