@@ -2,7 +2,20 @@
 
 A comprehensive solution for extracting and processing information from South African ID cards using Detectron2 for object detection.
 
-## Current Status (March 21, 2024)
+## Current Status (February 7, 2025)
+
+### Development Environments
+1. **Google Colab (Training Environment)**
+   - Used for model training and experimentation
+   - GPU acceleration available
+   - Jupyter notebook interface
+   - Shared model storage via Google Drive
+
+2. **Local Windows (Inference Environment)**
+   - Used for production inference
+   - CPU-based processing
+   - Command-line interface
+   - Local file system storage
 
 ### Object Detection
 - Model: Detectron2 Faster R-CNN
@@ -16,35 +29,41 @@ A comprehensive solution for extracting and processing information from South Af
   * Dual OCR Engine Support (Tesseract + PaddleOCR)
   * Field-specific preprocessing
   * OCR visualization
-  * Results packaging
+  * Results packaging (JSON/Text)
   * Image-only field handling
 
-- Processing Options:
-  * Single image processing
-  * Batch processing
-  * Visualization options
-  * Results export (JSON/MD)
-
 ### Latest Updates
-- Added PaddleOCR integration
-- Implemented local inference script
+- Added local inference script with dual OCR support
+- Implemented comprehensive error handling
+- Created detailed setup and usage documentation
 - Added field-specific OCR configurations
 - Improved text cleaning for different field types
 
-### Output Generation
-- JSON results with field types
-- Markdown summary reports
-- OCR detection visualizations
-- Packaged zip downloads
+### Documentation Structure
+```
+project/
+├── docs/                           # Project documentation
+│   ├── SETUP_AND_USAGE_GUIDE.md    # Detailed setup instructions
+│   ├── PROJECT_STATUS.md           # Current project status
+│   ├── Checklist.md               # Development checklist
+│   └── plan.md                    # Project planning
+├── models/                         # Trained models
+├── test_images/                    # Test image directory
+└── outputs/                        # Processing outputs
+    ├── classified/                # JSON results
+    └── text_results/              # Text format results
+```
 
 ## Setup Instructions
 
-### Prerequisites
-1. Python 3.7+
-2. CUDA-capable GPU (recommended)
-3. Google Drive (for model storage)
+### Local Environment Setup
+See `docs/SETUP_AND_USAGE_GUIDE.md` for detailed instructions on:
+- Creating the conda environment
+- Installing dependencies
+- Setting up Tesseract OCR
+- Running the inference script
 
-### Quick Start
+### Google Colab Setup
 1. Mount Google Drive:
 ```python
 from google.colab import drive
@@ -54,20 +73,6 @@ drive.mount('/content/drive')
 2. Install Dependencies:
 ```python
 !pip install 'git+https://github.com/facebookresearch/detectron2.git'
-```
-
-3. Run Inference:
-```python
-# Single image
-run_inference("/path/to/image.jpg", confidence_threshold=0.5)
-
-# Batch processing
-batch_inference(
-    image_dir="/path/to/images",
-    confidence_threshold=0.5,
-    max_images=None,  # Process all images
-    save_dir="/path/to/save/segments"
-)
 ```
 
 ## Directory Structure
