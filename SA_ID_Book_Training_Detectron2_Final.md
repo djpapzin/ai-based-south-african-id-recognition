@@ -559,14 +559,15 @@ class CocoTrainer(DefaultTrainer):
     
     def build_hooks(self):
         hooks_list = super().build_hooks()
-        # Enable evaluation hook for periodic validation
-        hooks_list.append(
-            hooks.EvalHook(
-                self.cfg.TEST.EVAL_PERIOD,
-                lambda: self.test(self.cfg, self.model),
-                self.cfg.DATASETS.TEST[0]
+        # Only add evaluation hook if evaluation period > 0
+        if self.cfg.TEST.EVAL_PERIOD > 0:
+            hooks_list.append(
+                hooks.EvalHook(
+                    self.cfg.TEST.EVAL_PERIOD,
+                    lambda: self.test(self.cfg, self.model),
+                    self.cfg.DATASETS.TEST[0]
+                )
             )
-        )
         return hooks_list
     
     @classmethod
