@@ -565,7 +565,7 @@ class CocoTrainer(DefaultTrainer):
             hooks_list.append(
                 hooks.EvalHook(
                     self.cfg.TEST.EVAL_PERIOD,
-                    self.test,
+                    lambda: self.test(self.cfg, self.model),
                     self.cfg.DATASETS.TEST[0]
                 )
             )
@@ -582,28 +582,29 @@ class CocoTrainer(DefaultTrainer):
                 for name in cfg.DATASETS.TEST
             ]
         
-        res = {}
-        for evaluator in evaluators:
-            # Model should be in eval mode
-            model.eval()
-            with torch.no_grad():
-                # Initialize predictions list
-                evaluator._predictions = []
-                
-                # Get validation dataset
-                data_loader = cls.build_test_loader(cfg, cfg.DATASETS.TEST[0])
+        # Build test loader
+        data_loader = cls.build_test_loader(cfg, cfg.DATASETS.TEST[0])
+        
+        # Put model in eval mode
+        model.eval()
+        results = {}
+        
+        with torch.no_grad():
+            for evaluator in evaluators:
+                # Initialize evaluator
+                evaluator.reset()
                 
                 # Run inference
                 for idx, inputs in enumerate(data_loader):
                     outputs = model(inputs)
                     evaluator.process(inputs, outputs)
-            
-            # Evaluate predictions
-            results = evaluator.evaluate()
-            if results is not None:
-                res.update(results)
+                
+                # Evaluate predictions
+                results_i = evaluator.evaluate()
+                if results_i is not None:
+                    results.update(results_i)
         
-        return res
+        return results
 
 def setup_cfg(train_dataset_name, val_dataset_name, num_classes, output_dir):
     """Setup Detectron2 configuration."""
