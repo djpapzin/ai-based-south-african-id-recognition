@@ -35,6 +35,8 @@ from detectron2.data import DatasetCatalog, MetadataCatalog
 from detectron2.data.datasets import register_coco_instances
 from detectron2.utils.visualizer import Visualizer
 from detectron2.data import MetadataCatalog
+from detectron2.modeling import build_model
+from detectron2.checkpoint import DetectionCheckpointer
 print(f"Detectron2 version: {detectron2.__version__}")
 
 ## 3. Mount Google Drive and Setup Paths
@@ -575,12 +577,12 @@ class CocoTrainer(DefaultTrainer):
     def test(cls, cfg, model, evaluators=None):
         """Run model evaluation on test/validation set."""
         if evaluators is None:
-            evaluators = [
-                cls.build_evaluator(
+        evaluators = [
+            cls.build_evaluator(
                     cfg, name, output_folder=os.path.join(cfg.OUTPUT_DIR, "inference", name)
-                )
-                for name in cfg.DATASETS.TEST
-            ]
+            )
+            for name in cfg.DATASETS.TEST
+        ]
         
         # Build test loader
         data_loader = cls.build_test_loader(cfg, cfg.DATASETS.TEST[0])
@@ -814,21 +816,25 @@ thing_classes = [
 
 def setup_cfg(confidence_threshold=0.5):
     """Setup inference configuration."""
-        cfg = get_cfg()
-        cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
-        cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(thing_classes)
-        cfg.MODEL.DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+    cfg = get_cfg()
+    cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(thing_classes)
+    cfg.MODEL.DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     cfg.MODEL.WEIGHTS = MODEL_PATH
-        cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
     return cfg
 
 def run_inference(image_path, confidence_threshold=0.5, cfg=None):
     """Run inference on a single image"""
     if cfg is None:
         cfg = setup_cfg(confidence_threshold)
-
+    
     print(f"\nRunning inference on {cfg.MODEL.DEVICE.upper()}")
-    predictor = DefaultPredictor(cfg)
+    
+    # Initialize model
+    model = build_model(cfg)
+    DetectionCheckpointer(model).load(cfg.MODEL.WEIGHTS)
+    model.eval()
     
     # Read image
     image = cv2.imread(image_path)
@@ -836,7 +842,12 @@ def run_inference(image_path, confidence_threshold=0.5, cfg=None):
         raise ValueError(f"Could not read image at {image_path}")
     
     # Run inference
-        outputs = predictor(image)
+    with torch.no_grad():
+        # Convert image to format expected by the model
+        height, width = image.shape[:2]
+        image_tensor = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
+        inputs = {"image": image_tensor, "height": height, "width": width}
+        outputs = model([inputs])[0]
     
     # Visualize results
     v = Visualizer(image[:, :, ::-1],
@@ -845,6 +856,75 @@ def run_inference(image_path, confidence_threshold=0.5, cfg=None):
     out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
     
     return image, outputs, out.get_image()[:, :, ::-1]
+
+def process_validation_set(confidence_threshold=0.5):
+    """Process all images in the validation set"""
+    print(f"\nProcessing validation set from: {VAL_IMAGES_DIR}")
+    
+    # Get all images
+    image_files = [f for f in os.listdir(VAL_IMAGES_DIR) 
+                  if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+    
+    print(f"Found {len(image_files)} images to process")
+    
+    # Setup configuration once
+    cfg = setup_cfg(confidence_threshold)
+    
+    # Initialize model only once
+    model = build_model(cfg)
+    DetectionCheckpointer(model).load(cfg.MODEL.WEIGHTS)
+    model.eval()
+    
+    all_results = []
+    
+    for image_file in image_files:
+        print(f"\nProcessing: {image_file}")
+        image_path = os.path.join(VAL_IMAGES_DIR, image_file)
+        try:
+            # Run inference using the initialized model
+            image = cv2.imread(image_path)
+            if image is None:
+                raise ValueError(f"Could not read image at {image_path}")
+            
+            with torch.no_grad():
+                height, width = image.shape[:2]
+                image_tensor = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
+                inputs = {"image": image_tensor, "height": height, "width": width}
+                outputs = model([inputs])[0]
+            
+            # Visualize results
+            v = Visualizer(image[:, :, ::-1],
+                         metadata=MetadataCatalog.get("sa_id_merged_val"),
+                         scale=1.0)
+            visualization = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+            
+            # Save visualization
+            vis_path = os.path.join(VISUALIZATIONS_DIR, f"detected_{image_file}")
+            cv2.imwrite(vis_path, visualization.get_image()[:, :, ::-1])
+            
+            # Save segments and get metadata
+            image_name = os.path.splitext(image_file)[0]
+            metadata = save_labeled_segments(image, outputs, image_name)
+            all_results.append(metadata)
+            
+            print(f"✓ Processed {image_file}")
+            print(f"  - Visualization saved to: {vis_path}")
+            print(f"  - Segments saved to: {os.path.join(SEGMENTS_DIR, image_name)}")
+            
+        except Exception as e:
+            print(f"Error processing {image_file}: {str(e)}")
+    
+    # Save all results
+    results_path = os.path.join(INFERENCE_OUTPUT_DIR, "inference_results.json")
+    with open(results_path, 'w') as f:
+        json.dump(all_results, f, indent=2)
+    
+    print(f"\nProcessing complete!")
+    print(f"- Processed {len(image_files)} images")
+    print(f"- Results saved to: {results_path}")
+    print(f"- Visualizations saved to: {VISUALIZATIONS_DIR}")
+    print(f"- Segments saved to: {SEGMENTS_DIR}")
+    return results_path
 
 def save_labeled_segments(image, outputs, image_name):
     """Save detected segments with their labels"""
@@ -900,55 +980,6 @@ def save_labeled_segments(image, outputs, image_name):
         json.dump(metadata_dict, f, indent=2)
     
     return metadata_dict
-
-def process_validation_set(confidence_threshold=0.5):
-    """Process all images in the validation set"""
-    print(f"\nProcessing validation set from: {VAL_IMAGES_DIR}")
-    
-    # Get all images
-    image_files = [f for f in os.listdir(VAL_IMAGES_DIR) 
-                  if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-    
-    print(f"Found {len(image_files)} images to process")
-    
-    # Setup configuration once
-    cfg = setup_cfg(confidence_threshold)
-    all_results = []
-    
-    for image_file in image_files:
-        print(f"\nProcessing: {image_file}")
-        image_path = os.path.join(VAL_IMAGES_DIR, image_file)
-        try:
-            # Run inference
-            image, outputs, visualization = run_inference(image_path, confidence_threshold, cfg)
-            
-            # Save visualization
-            vis_path = os.path.join(VISUALIZATIONS_DIR, f"detected_{image_file}")
-            cv2.imwrite(vis_path, visualization)
-            
-            # Save segments and get metadata
-            image_name = os.path.splitext(image_file)[0]
-            metadata = save_labeled_segments(image, outputs, image_name)
-            all_results.append(metadata)
-            
-            print(f"✓ Processed {image_file}")
-            print(f"  - Visualization saved to: {vis_path}")
-            print(f"  - Segments saved to: {os.path.join(SEGMENTS_DIR, image_name)}")
-            
-        except Exception as e:
-            print(f"Error processing {image_file}: {str(e)}")
-    
-    # Save all results
-    results_path = os.path.join(INFERENCE_OUTPUT_DIR, "inference_results.json")
-    with open(results_path, 'w') as f:
-        json.dump(all_results, f, indent=2)
-    
-    print(f"\nProcessing complete!")
-    print(f"- Processed {len(image_files)} images")
-    print(f"- Results saved to: {results_path}")
-    print(f"- Visualizations saved to: {VISUALIZATIONS_DIR}")
-    print(f"- Segments saved to: {SEGMENTS_DIR}")
-    return results_path
 
 if __name__ == "__main__":
     # Process validation set
