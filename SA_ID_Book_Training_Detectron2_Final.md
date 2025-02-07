@@ -16,16 +16,23 @@ if os.path.exists('/content/drive'):
 print("Mounting Google Drive...")
 drive.mount('/content/drive')
 
-# Verify the dataset directory exists
+# Verify the dataset directories exist
 print("\nVerifying paths...")
 DRIVE_ROOT = "/content/drive/MyDrive/Kwantu/Machine Learning"
-DATASET_ROOT = os.path.join(DRIVE_ROOT, "dj_dataset")
-LABEL_STUDIO_EXPORT = os.path.join(DATASET_ROOT, "result.json")  # result.json is directly in dj_dataset
-IMAGES_DIR = os.path.join(DATASET_ROOT, "images")  # images folder is directly in dj_dataset
+
+# DJ Dataset paths
+DJ_DATASET_ROOT = os.path.join(DRIVE_ROOT, "dj_dataset")
+DJ_LABEL_STUDIO_EXPORT = os.path.join(DJ_DATASET_ROOT, "result.json")
+DJ_IMAGES_DIR = os.path.join(DJ_DATASET_ROOT, "images")
+
+# Abenathi Dataset paths
+ABENATHI_DATASET_ROOT = os.path.join(DRIVE_ROOT, "abenathi_dataset")
+ABENATHI_LABEL_STUDIO_EXPORT = os.path.join(ABENATHI_DATASET_ROOT, "result.json")
+ABENATHI_IMAGES_DIR = os.path.join(ABENATHI_DATASET_ROOT, "images")
 
 # Output directories
-TRAIN_DIR = os.path.join(DATASET_ROOT, "train")
-VAL_DIR = os.path.join(DATASET_ROOT, "val")
+TRAIN_DIR = os.path.join(DRIVE_ROOT, "combined_dataset/train")
+VAL_DIR = os.path.join(DRIVE_ROOT, "combined_dataset/val")
 OUTPUT_DIR = os.path.join(DRIVE_ROOT, "model_output")
 LOG_DIR = os.path.join(OUTPUT_DIR, "logs")
     
@@ -36,7 +43,8 @@ def prepare_dataset_structure():
         os.path.join(TRAIN_DIR, "images"),
         os.path.join(VAL_DIR, "images"),
         OUTPUT_DIR, LOG_DIR,
-        IMAGES_DIR  # Add images directory to be created
+        DJ_IMAGES_DIR,  # Add DJ images directory
+        ABENATHI_IMAGES_DIR  # Add Abenathi images directory
     ]
     
     for directory in directories:
@@ -49,7 +57,7 @@ def verify_and_fix_image_dimensions(coco_data, images_dir):
     fixed_count = 0
     
     for img in coco_data['images']:
-        img_path = os.path.join(images_dir, img['file_name'])
+        img_path = os.path.join(images_dir, img['file_name'].replace('\\', '/'))
         if os.path.exists(img_path):
             # Read actual image dimensions
             image = cv2.imread(img_path)
@@ -72,65 +80,118 @@ def verify_and_fix_image_dimensions(coco_data, images_dir):
     print(f"Fixed dimensions for {fixed_count} images")
     return coco_data
 
+def merge_coco_datasets(coco_data1, coco_data2):
+    """Merge two COCO format datasets."""
+    print("\nMerging datasets...")
+    
+    # Create new merged dataset
+    merged_data = {
+        'images': [],
+        'annotations': [],
+        'categories': coco_data1['categories']  # Use categories from first dataset
+    }
+    
+    # Create category mapping from dataset2 to dataset1
+    category_map = {}
+    for cat1 in coco_data1['categories']:
+        for cat2 in coco_data2['categories']:
+            if cat1['name'].lower() == cat2['name'].lower():
+                category_map[cat2['id']] = cat1['id']
+    
+    # Add images from both datasets with updated IDs
+    image_id_map = {}  # To map old image IDs to new ones
+    next_image_id = 1
+    
+    # Process images from first dataset
+    for img in coco_data1['images']:
+        new_img = dict(img)
+        image_id_map[('ds1', img['id'])] = next_image_id
+        new_img['id'] = next_image_id
+        merged_data['images'].append(new_img)
+        next_image_id += 1
+    
+    # Process images from second dataset
+    for img in coco_data2['images']:
+        new_img = dict(img)
+        image_id_map[('ds2', img['id'])] = next_image_id
+        new_img['id'] = next_image_id
+        merged_data['images'].append(new_img)
+        next_image_id += 1
+    
+    # Process annotations
+    next_ann_id = 1
+    
+    # Add annotations from first dataset
+    for ann in coco_data1['annotations']:
+        new_ann = dict(ann)
+        new_ann['id'] = next_ann_id
+        new_ann['image_id'] = image_id_map[('ds1', ann['image_id'])]
+        merged_data['annotations'].append(new_ann)
+        next_ann_id += 1
+    
+    # Add annotations from second dataset
+    for ann in coco_data2['annotations']:
+        new_ann = dict(ann)
+        new_ann['id'] = next_ann_id
+        new_ann['image_id'] = image_id_map[('ds2', ann['image_id'])]
+        new_ann['category_id'] = category_map.get(ann['category_id'], ann['category_id'])
+        merged_data['annotations'].append(new_ann)
+        next_ann_id += 1
+    
+    print(f"Merged dataset contains:")
+    print(f"- {len(merged_data['images'])} images")
+    print(f"- {len(merged_data['annotations'])} annotations")
+    print(f"- {len(merged_data['categories'])} categories")
+    
+    return merged_data
+
 def process_label_studio_export():
-    """Process Label Studio export and split into train/val sets."""
-    print("\nProcessing Label Studio export...")
+    """Process Label Studio exports and merge datasets."""
+    print("\nProcessing Label Studio exports...")
     
-    # Verify Label Studio export exists
-    if not os.path.exists(LABEL_STUDIO_EXPORT):
-        print(f"\nChecking directory contents:")
-        print(f"DATASET_ROOT: {DATASET_ROOT}")
-        if os.path.exists(DATASET_ROOT):
-            print("Files in dataset directory:")
-            for item in os.listdir(DATASET_ROOT):
-                print(f"  - {item}")
-        else:
-            print("Dataset directory does not exist!")
-        raise FileNotFoundError(f"Label Studio export not found at: {LABEL_STUDIO_EXPORT}")
+    # Verify Label Studio exports exist
+    for export_path in [DJ_LABEL_STUDIO_EXPORT, ABENATHI_LABEL_STUDIO_EXPORT]:
+        if not os.path.exists(export_path):
+            raise FileNotFoundError(f"Label Studio export not found at: {export_path}")
     
-    print(f"Found Label Studio export at: {LABEL_STUDIO_EXPORT}")
+    print(f"Found Label Studio exports")
     
-    # Read Label Studio export
-    with open(LABEL_STUDIO_EXPORT, 'r') as f:
-        coco_data = json.load(f)
+    # Read Label Studio exports
+    with open(DJ_LABEL_STUDIO_EXPORT, 'r') as f:
+        dj_data = json.load(f)
+    with open(ABENATHI_LABEL_STUDIO_EXPORT, 'r') as f:
+        abenathi_data = json.load(f)
     
-    print(f"Successfully loaded COCO format export file")
-    print(f"Images: {len(coco_data['images'])}")
-    print(f"Categories: {len(coco_data['categories'])}")
-    print(f"Annotations: {len(coco_data['annotations'])}")
+    print(f"\nDJ Dataset:")
+    print(f"Images: {len(dj_data['images'])}")
+    print(f"Categories: {len(dj_data['categories'])}")
+    print(f"Annotations: {len(dj_data['annotations'])}")
     
-    # Fix category IDs to start from 1
+    print(f"\nAbenathi Dataset:")
+    print(f"Images: {len(abenathi_data['images'])}")
+    print(f"Categories: {len(abenathi_data['categories'])}")
+    print(f"Annotations: {len(abenathi_data['annotations'])}")
+    
+    # Fix category IDs to start from 1 in DJ dataset
     category_id_map = {}
-    for idx, category in enumerate(coco_data['categories'], start=1):
+    for idx, category in enumerate(dj_data['categories'], start=1):
         category_id_map[category['id']] = idx
         category['id'] = idx
     
-    # Update category IDs in annotations
-    for ann in coco_data['annotations']:
+    # Update category IDs in DJ annotations
+    for ann in dj_data['annotations']:
         ann['category_id'] = category_id_map[ann['category_id']]
     
-    # Fix image dimensions and clean up paths
-    for img in coco_data['images']:
-        # Clean up file paths - remove 'images\' or 'images/' prefix and normalize path
-        img['file_name'] = os.path.basename(img['file_name'].replace('\\', '/'))
-        
-        # Get full image path
-        img_path = os.path.join(IMAGES_DIR, img['file_name'])
-        if os.path.exists(img_path):
-            # Read actual image dimensions
-            image = cv2.imread(img_path)
-            if image is not None:
-                actual_height, actual_width = image.shape[:2]
-                if img['width'] != actual_width or img['height'] != actual_height:
-                    print(f"Fixing dimensions for {img['file_name']}")
-                    print(f"  Annotation: {img['width']}x{img['height']}")
-                    print(f"  Actual: {actual_width}x{actual_height}")
-                    img['width'] = actual_width
-                    img['height'] = actual_height
+    # Fix image dimensions and clean up paths for both datasets
+    dj_data = verify_and_fix_image_dimensions(dj_data, DJ_IMAGES_DIR)
+    abenathi_data = verify_and_fix_image_dimensions(abenathi_data, ABENATHI_IMAGES_DIR)
     
-    # Get image filenames
-    image_files = [img['file_name'] for img in coco_data['images']]
-    print(f"\nFound {len(image_files)} images in annotations")
+    # Merge datasets
+    merged_data = merge_coco_datasets(dj_data, abenathi_data)
+    
+    # Get all image filenames
+    image_files = [img['file_name'] for img in merged_data['images']]
+    print(f"\nFound {len(image_files)} total images in annotations")
     
     # Print first few filenames for verification
     print("\nFirst few image filenames after cleanup:")
@@ -139,9 +200,11 @@ def process_label_studio_export():
     
     # Verify all images exist
     missing_images = []
-    for img_file in image_files:
-        if not os.path.exists(os.path.join(IMAGES_DIR, img_file)):
-            missing_images.append(img_file)
+    for img in merged_data['images']:
+        img_path = os.path.join(DJ_IMAGES_DIR if 'dj_dataset' in img['file_name'] else ABENATHI_IMAGES_DIR,
+                              os.path.basename(img['file_name'].replace('\\', '/')))
+        if not os.path.exists(img_path):
+            missing_images.append(img['file_name'])
     
     if missing_images:
         print("\nWarning: Following images are missing:")
@@ -151,7 +214,7 @@ def process_label_studio_export():
             print(f"... and {len(missing_images) - 5} more")
     
     # Split into train/val sets
-    image_ids = [img['id'] for img in coco_data['images']]
+    image_ids = [img['id'] for img in merged_data['images']]
     train_ids, val_ids = train_test_split(
         image_ids, test_size=0.2, random_state=42
     )
@@ -169,9 +232,9 @@ def process_label_studio_export():
         
         # Create COCO format annotations for this split
         split_data = {
-            "images": [img for img in coco_data['images'] if img['id'] in split_ids],
-            "categories": coco_data['categories'],
-            "annotations": [ann for ann in coco_data['annotations'] if ann['image_id'] in split_ids]
+            "images": [img for img in merged_data['images'] if img['id'] in split_ids],
+            "categories": merged_data['categories'],
+            "annotations": [ann for ann in merged_data['annotations'] if ann['image_id'] in split_ids]
         }
         
         # Save annotations
@@ -184,13 +247,15 @@ def process_label_studio_export():
         split_filenames = [img['file_name'] for img in split_data['images']]
         copied_count = 0
         for img_file in split_filenames:
-            src = os.path.join(IMAGES_DIR, img_file)
-            dst = os.path.join(split_dir, "images", img_file)
+            # Determine source directory based on dataset
+            src_dir = DJ_IMAGES_DIR if 'dj_dataset' in img_file else ABENATHI_IMAGES_DIR
+            src = os.path.join(src_dir, os.path.basename(img_file.replace('\\', '/')))
+            dst = os.path.join(split_dir, "images", os.path.basename(img_file.replace('\\', '/')))
             if os.path.exists(src):
                 shutil.copy2(src, dst)
                 copied_count += 1
-        else:
-                print(f"Warning: Could not find image {img_file}")
+            else:
+                print(f"Warning: Could not find image {src}")
         
         print(f"✓ Copied {copied_count}/{len(split_filenames)} images for {split_name}")
         print(f"✓ Split contains {len(split_data['images'])} images and {len(split_data['annotations'])} annotations")
@@ -209,7 +274,7 @@ def verify_dataset():
         print(f"\n{split.upper()} SET:")
         
         # Check annotation file
-        ann_path = os.path.join(DATASET_ROOT, split, "annotations.json")
+        ann_path = os.path.join(DRIVE_ROOT, "combined_dataset", split, "annotations.json")
         if os.path.exists(ann_path):
             with open(ann_path, 'r') as f:
                 data = json.load(f)
@@ -229,7 +294,7 @@ def verify_dataset():
             print(f"✗ Missing annotations file: {ann_path}")
         
         # Check images directory
-        img_dir = os.path.join(DATASET_ROOT, split, "images")
+        img_dir = os.path.join(DRIVE_ROOT, "combined_dataset", split, "images")
         if os.path.exists(img_dir):
             # Check for both jpg and jpeg files
             jpg_images = list(Path(img_dir).glob("*.jpg"))
@@ -248,7 +313,7 @@ def inspect_annotations():
     """Inspect the structure of annotations to check for keypoints."""
     print("\nInspecting annotation structure...")
     
-    with open(LABEL_STUDIO_EXPORT, 'r') as f:
+    with open(DJ_LABEL_STUDIO_EXPORT, 'r') as f:
         data = json.load(f)
     
     # Check categories structure
@@ -485,8 +550,8 @@ def register_datasets():
     
     for split in ['train', 'val']:
         name = f"sa_id_{split}"
-        json_file = os.path.join(DATASET_ROOT, split, "annotations.json")
-        image_root = os.path.join(DATASET_ROOT, split, "images")
+        json_file = os.path.join(DRIVE_ROOT, "combined_dataset", split, "annotations.json")
+        image_root = os.path.join(DRIVE_ROOT, "combined_dataset", split, "images")
         
         # Verify files exist before registration
         if not os.path.exists(json_file):
