@@ -74,3 +74,9 @@ idcopiesOld/*
 *.gz
 *.rar
 *.7z
+abenathi_object_detection_dataset/
+backup_scripts/
+cleaned_data/
+dj_object_detection_dataset/
+labelstudio-temp/
+labelstudio_data/
