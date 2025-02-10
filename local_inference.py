@@ -7,7 +7,7 @@ from datetime import datetime
 from detectron2.config import get_cfg
 from detectron2.engine import DefaultPredictor
 from detectron2.utils.visualizer import Visualizer
-from detectron2.data import MetadataCatalog
+from detectron2.data import MetadataCatalog, DatasetCatalog
 from detectron2.model_zoo import model_zoo
 from paddleocr import PaddleOCR
 from document_classifier import DocumentClassifier
@@ -18,6 +18,24 @@ import logging
 # Configure logging
 logging.getLogger("detectron2").setLevel(logging.WARNING)
 logging.getLogger("fvcore").setLevel(logging.WARNING)
+
+# Register dataset and metadata
+def register_sa_id_metadata():
+    """Register South African ID document dataset metadata"""
+    if "sa_id_train" not in DatasetCatalog:
+        DatasetCatalog.register("sa_id_train", lambda: [])
+    
+    MetadataCatalog.get("sa_id_train").set(
+        thing_classes=[
+            "id_number", "surname", "names", "nationality",
+            "country_of_birth", "date_of_birth", "sex",
+            "citizenship_status", "face", "signature",
+            "id_document", "barcode"
+        ]
+    )
+
+# Register metadata
+register_sa_id_metadata()
 
 # Set Tesseract executable path
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
