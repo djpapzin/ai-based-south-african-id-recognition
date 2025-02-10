@@ -1021,8 +1021,11 @@ if __name__ == "__main__":
 ```python
 # Standalone OCR script for SA ID Book segments
 # Requirements:
-# !apt-get install tesseract-ocr -y
-# !pip install pytesseract pillow matplotlib
+!apt-get update
+!apt-get install tesseract-ocr ffmpeg libsm6 libxext6 -y
+!pip install paddlepaddle-gpu
+!pip install "paddleocr>=2.0.1"
+!pip install pytesseract pillow matplotlib opencv-python-headless
 
 import os
 import json
@@ -1033,10 +1036,30 @@ from datetime import datetime
 import pytesseract
 import matplotlib.pyplot as plt
 from IPython.display import display, clear_output
+from google.colab import drive
+import shutil
 
-# Install Tesseract OCR if not already installed
-!apt-get update
-!apt-get install tesseract-ocr -y
+# Clean up and mount Google Drive
+print("Setting up Google Drive...")
+if os.path.exists('/content/drive'):
+    print("Unmounting existing drive...")
+    !fusermount -u /content/drive
+    print("Cleaning up mount point...")
+    !rm -rf /content/drive
+print("Creating fresh mount point...")
+!mkdir -p /content/drive
+print("Mounting Google Drive...")
+drive.mount('/content/drive')
+
+# Now import PaddleOCR after installation
+from paddleocr import PaddleOCR
+
+# Initialize PaddleOCR with GPU settings
+paddle_ocr = PaddleOCR(use_angle_cls=True, lang='en', use_gpu=True, 
+                       enable_mkldnn=False,  # Disable MKL-DNN since we're using GPU
+                       det_db_box_thresh=0.5,  # Detection confidence threshold
+                       det_db_unclip_ratio=1.6,  # Text detection unclip ratio
+                       rec_batch_num=8)  # Batch size for recognition
 
 # Configuration
 DRIVE_ROOT = "/content/drive/MyDrive/Kwantu/Machine Learning"
@@ -1047,55 +1070,79 @@ OCR_OUTPUT_DIR = os.path.join(INFERENCE_OUTPUT_DIR, "ocr_results")
 # Create output directory
 os.makedirs(OCR_OUTPUT_DIR, exist_ok=True)
 
-def display_ocr_results(image_path, field_type, text, confidence):
-    """Display the segment image with its OCR result."""
-    # Read and convert image
-    image = cv2.imread(image_path)
-    if image is None:
-        print(f"Could not read image: {image_path}")
-        return
-    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+def preprocess_image(image, field_type):
+    """Preprocess image based on field type."""
+    # Convert to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     
-    # Create figure
-    plt.figure(figsize=(10, 4))
+    # Apply different preprocessing based on field type
+    if field_type in ['id_number', 'date_of_birth']:
+        # Increase contrast for numerical fields
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        processed = clahe.apply(gray)
+        # Binary threshold
+        _, processed = cv2.threshold(processed, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            else:
+        # For text fields, use adaptive thresholding
+        processed = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
+        )
     
-    # Display image
-    plt.subplot(1, 1, 1)
-    plt.imshow(image_rgb)
-    plt.title(f"{field_type}\nConfidence: {confidence*100:.1f}%\nText: {text}")
+    # Denoise
+    processed = cv2.fastNlMeansDenoising(processed)
+    
+    # Add padding
+    padded = cv2.copyMakeBorder(
+        processed, 10, 10, 10, 10, cv2.BORDER_CONSTANT, value=255
+    )
+    
+    return padded
+
+def display_preprocessing_steps(original, processed, field_type, text_tesseract, text_paddle, conf_tesseract, conf_paddle, tesseract_boxes=None, paddle_boxes=None):
+    """Display original and preprocessed images with OCR results and bounding boxes."""
+    plt.figure(figsize=(20, 5))
+    
+    # Display original image with Tesseract boxes
+    plt.subplot(141)
+    original_rgb = cv2.cvtColor(original, cv2.COLOR_BGR2RGB)
+    plt.imshow(original_rgb)
+    if tesseract_boxes is not None:
+        for box in tesseract_boxes:
+            x, y, w, h = box
+            rect = plt.Rectangle((x, y), w, h, fill=False, color='blue', linewidth=1)
+            plt.gca().add_patch(rect)
+    plt.title("Original + Tesseract Boxes")
     plt.axis('off')
     
-    plt.tight_layout()
-    plt.show()
-
-def display_document_ocr_results(doc_path, results):
-    """Display all OCR results for a document."""
-    fields = results['fields']
-    n_fields = len(fields)
+    # Display original image with PaddleOCR boxes
+    plt.subplot(142)
+    plt.imshow(original_rgb)
+    if paddle_boxes is not None:
+        for box in paddle_boxes:
+            # PaddleOCR boxes are in [[x1,y1], [x2,y2], [x3,y3], [x4,y4]] format
+            box = np.array(box).astype(np.int32)
+            plt.plot([box[0][0], box[1][0]], [box[0][1], box[1][1]], 'g-', linewidth=1)
+            plt.plot([box[1][0], box[2][0]], [box[1][1], box[2][1]], 'g-', linewidth=1)
+            plt.plot([box[2][0], box[3][0]], [box[2][1], box[3][1]], 'g-', linewidth=1)
+            plt.plot([box[3][0], box[0][0]], [box[3][1], box[0][1]], 'g-', linewidth=1)
+    plt.title("Original + PaddleOCR Boxes")
+    plt.axis('off')
     
-    if n_fields == 0:
-        print("No fields detected in this document.")
-        return
+    # Display preprocessed image
+    plt.subplot(143)
+    plt.imshow(processed, cmap='gray')
+    plt.title("Preprocessed Image")
+    plt.axis('off')
     
-    # Calculate grid dimensions
-    n_cols = min(3, n_fields)
-    n_rows = (n_fields + n_cols - 1) // n_cols
-    
-    plt.figure(figsize=(6*n_cols, 4*n_rows))
-    
-    for idx, (field_type, info) in enumerate(fields.items(), 1):
-        image_path = os.path.join(doc_path, info['segment_file'])
-        if os.path.exists(image_path):
-            # Read and convert image
-            image = cv2.imread(image_path)
-            if image is not None:
-                image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-                
-                # Create subplot
-                plt.subplot(n_rows, n_cols, idx)
-                plt.imshow(image_rgb)
-                plt.title(f"{field_type}\nConfidence: {info['confidence']*100:.1f}%\nText: {info['text']}")
-                plt.axis('off')
+    # Display OCR results
+    plt.subplot(144)
+    plt.axis('off')
+    plt.text(0.1, 0.9, f"Field Type: {field_type}", fontsize=10, color='black')
+    plt.text(0.1, 0.7, "Tesseract (Blue):", fontsize=10, color='blue')
+    plt.text(0.1, 0.6, f"{text_tesseract}\nConfidence: {conf_tesseract*100:.1f}%", fontsize=10)
+    plt.text(0.1, 0.4, "PaddleOCR (Green):", fontsize=10, color='green')
+    plt.text(0.1, 0.3, f"{text_paddle}\nConfidence: {conf_paddle*100:.1f}%", fontsize=10)
+    plt.title("OCR Results")
     
     plt.tight_layout()
     plt.show()
@@ -1108,8 +1155,14 @@ def process_segments_with_ocr():
     ocr_stats = {
         'total_fields': 0,
         'fields_per_type': {},
-        'confidence_per_type': {},
-        'successful_extractions': 0
+        'confidence_per_type': {
+            'tesseract': {},
+            'paddle': {}
+        },
+        'successful_extractions': {
+            'tesseract': 0,
+            'paddle': 0
+        }
     }
     
     # Process each image directory (one per ID document)
@@ -1138,61 +1191,122 @@ def process_segments_with_ocr():
         for filename in segments_to_process:
             # Extract field type from filename
             field_type = os.path.splitext(filename)[0].split('_')[0]
-            
-            # Read image
+    
+    # Read image
             image_path = os.path.join(doc_path, filename)
             try:
-                image = Image.open(image_path)
+                # Read with OpenCV for preprocessing
+                original_image = cv2.imread(image_path)
+                if original_image is None:
+                    print(f"Could not read image: {image_path}")
+                    continue
                 
-                # Configure OCR settings based on field type
+                # Preprocess image
+                processed_image = preprocess_image(original_image, field_type)
+                
+                # Tesseract OCR with bounding boxes
                 config = ''
                 if field_type == 'id_number':
                     config = '--psm 7 -c tessedit_char_whitelist=0123456789'
                 elif field_type in ['date_of_birth']:
                     config = '--psm 7 -c tessedit_char_whitelist=0123456789/'
-                else:
+    else:
                     config = '--psm 7'
                 
-                # Perform OCR
-                text = pytesseract.image_to_string(image, config=config).strip()
-                confidence = detection_metadata['detections'].get(filename, {}).get('confidence', 0)
+                # Convert processed image to PIL for Tesseract
+                pil_image = Image.fromarray(processed_image)
+                text_tesseract = pytesseract.image_to_string(pil_image, config=config).strip()
+                
+                # Get Tesseract bounding boxes
+                tesseract_boxes = pytesseract.image_to_boxes(pil_image, config=config)
+                tesseract_box_list = []
+                if tesseract_boxes:
+                    for box in tesseract_boxes.splitlines():
+                        b = box.split()
+                        if len(b) >= 6:
+                            x, y, w, h = int(b[1]), pil_image.height - int(b[2]), int(b[3]), int(b[4])
+                            tesseract_box_list.append([x, y, w-x, h-y])
+                
+                # PaddleOCR with bounding boxes
+                paddle_result = paddle_ocr.ocr(processed_image, cls=True)
+                text_paddle = ""
+                conf_paddle = 0.0
+                paddle_box_list = []
+                
+                if paddle_result and paddle_result[0]:
+                    # Extract text, confidence scores, and boxes
+                    for line in paddle_result[0]:
+                        box = line[0]  # Get bounding box coordinates
+                        text = line[1][0]  # Get text
+                        conf = line[1][1]  # Get confidence score
+                        
+                        paddle_box_list.append(box)
+                        text_paddle += text + " "
+                        conf_paddle = conf if not conf_paddle else (conf_paddle + conf) / 2
+                    
+                    text_paddle = text_paddle.strip()
+                
+                # Get detection confidence
+                conf_tesseract = detection_metadata['detections'].get(filename, {}).get('confidence', 0)
+                
+                # Display preprocessing steps and results with bounding boxes
+                display_preprocessing_steps(
+                    original_image, processed_image, field_type,
+                    text_tesseract, text_paddle, conf_tesseract, conf_paddle,
+                    tesseract_box_list, paddle_box_list
+                )
                 
                 # Store results
                 results[doc_dir]['fields'][field_type] = {
-                    'text': text,
-                    'segment_file': filename,
-                    'confidence': confidence
+                    'tesseract': {
+                        'text': text_tesseract,
+                        'confidence': conf_tesseract
+                    },
+                    'paddle': {
+                        'text': text_paddle,
+                        'confidence': float(conf_paddle)
+                    },
+                    'segment_file': filename
                 }
                 
                 # Update statistics
                 ocr_stats['total_fields'] += 1
-                if text:  # If text was extracted
-                    ocr_stats['successful_extractions'] += 1
+                
+                # Update Tesseract stats
+                if text_tesseract:
+                    ocr_stats['successful_extractions']['tesseract'] += 1
+                
+                # Update PaddleOCR stats
+                if text_paddle:
+                    ocr_stats['successful_extractions']['paddle'] += 1
                 
                 if field_type not in ocr_stats['fields_per_type']:
                     ocr_stats['fields_per_type'][field_type] = 0
-                    ocr_stats['confidence_per_type'][field_type] = []
+                    ocr_stats['confidence_per_type']['tesseract'][field_type] = []
+                    ocr_stats['confidence_per_type']['paddle'][field_type] = []
+                
                 ocr_stats['fields_per_type'][field_type] += 1
-                ocr_stats['confidence_per_type'][field_type].append(confidence)
+                ocr_stats['confidence_per_type']['tesseract'][field_type].append(conf_tesseract)
+                ocr_stats['confidence_per_type']['paddle'][field_type].append(conf_paddle)
                 
-                # Display individual result
-                display_ocr_results(image_path, field_type, text, confidence)
-                
-                print(f"✓ {field_type}: {text}")
+                print(f"✓ {field_type}:")
+                print(f"  Tesseract: {text_tesseract}")
+                print(f"  PaddleOCR: {text_paddle}")
                 
             except Exception as e:
                 print(f"Error processing {image_path}: {str(e)}")
                 continue
-        
-        # Display all results for this document
-        print(f"\nAll fields for document {doc_dir}:")
-        display_document_ocr_results(doc_path, results[doc_dir])
     
     # Calculate average confidence per field type
-    avg_confidence_per_type = {}
-    for field_type, confidences in ocr_stats['confidence_per_type'].items():
-        if confidences:  # Check if there are any confidences to average
-            avg_confidence_per_type[field_type] = sum(confidences) / len(confidences)
+    avg_confidence = {
+        'tesseract': {},
+        'paddle': {}
+    }
+    
+    for engine in ['tesseract', 'paddle']:
+        for field_type, confidences in ocr_stats['confidence_per_type'][engine].items():
+            if confidences:  # Check if there are any confidences to average
+                avg_confidence[engine][field_type] = sum(confidences) / len(confidences)
     
     # Save results to JSON
     output_json = os.path.join(OCR_OUTPUT_DIR, "ocr_results.json")
@@ -1203,19 +1317,20 @@ def process_segments_with_ocr():
     print(f"\nOCR Processing Summary:")
     print(f"- Processed {len(results)} documents")
     print(f"- Total fields processed: {ocr_stats['total_fields']}")
-    if ocr_stats['total_fields'] > 0:  # Avoid division by zero
-        success_rate = (ocr_stats['successful_extractions'] / ocr_stats['total_fields']) * 100
-        print(f"- Successful extractions: {ocr_stats['successful_extractions']} ({success_rate:.1f}%)")
-    else:
-        print("- No fields were processed")
+    
+    if ocr_stats['total_fields'] > 0:
+        for engine in ['tesseract', 'paddle']:
+            success_rate = (ocr_stats['successful_extractions'][engine] / ocr_stats['total_fields']) * 100
+            print(f"\n{engine.capitalize()} Results:")
+            print(f"- Successful extractions: {ocr_stats['successful_extractions'][engine]} ({success_rate:.1f}%)")
     
     print(f"\nResults per field type:")
     for field_type, count in sorted(ocr_stats['fields_per_type'].items()):
-        if field_type in avg_confidence_per_type:
-            avg_conf = avg_confidence_per_type[field_type] * 100
-            print(f"  - {field_type}: {count} fields (avg conf: {avg_conf:.1f}%)")
-        else:
-            print(f"  - {field_type}: {count} fields (no confidence data)")
+        print(f"\n{field_type}:")
+        for engine in ['tesseract', 'paddle']:
+            if field_type in avg_confidence[engine]:
+                avg_conf = avg_confidence[engine][field_type] * 100
+                print(f"  - {engine.capitalize()}: {count} fields (avg conf: {avg_conf:.1f}%)")
     
     print(f"\nResults saved to: {output_json}")
     return results
