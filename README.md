@@ -2,6 +2,38 @@
 
 A comprehensive solution for extracting and processing information from South African ID cards using Detectron2 for object detection.
 
+## Running the Scripts
+
+### Environment Setup
+Before running any scripts, make sure to activate the correct conda environment:
+
+```bash
+conda activate detectron2_env
+```
+
+Alternatively, you can use the full path to the Python executable:
+```bash
+C:\Users\lfana\anaconda3\envs\detectron2_env\python.exe run_batch_inference.py
+```
+
+### Running Batch Inference
+The `run_batch_inference.py` script processes multiple ID images and generates structured output. To run:
+
+1. Activate the environment (as shown above)
+2. Place your ID images in the appropriate directory:
+   - New IDs: `test_dataset/new_ids/`
+   - Old IDs: `test_dataset/old_ids/`
+3. Run the script:
+   ```bash
+   python run_batch_inference.py
+   ```
+
+The script will:
+- Process all images in both directories
+- Generate OCR results in JSON format
+- Create text summaries for each ID
+- Show progress with a progress bar
+
 ## Current Status (February 7, 2025)
 
 ### Development Environments
