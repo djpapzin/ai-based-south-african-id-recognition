@@ -21,6 +21,31 @@ This document outlines the process of generating ground truth data for the South
   * New IDs: `new_ids/results.json`
   * Old IDs: `old_ids/results.json`
 
+## Running OCR Process
+
+### Environment Setup
+Before running the OCR process, ensure you're using the correct environment:
+
+```bash
+# Option 1: Activate the environment (Recommended)
+conda activate detectron2_env
+python run_batch_inference.py
+
+# Option 2: Use full path to Python executable
+C:\Users\lfana\anaconda3\envs\detectron2_env\python.exe run_batch_inference.py
+```
+
+### Output Structure
+The OCR results will be saved in:
+- `ground_truth/ocr_results/new_ids/results.json`
+- `ground_truth/ocr_results/old_ids/results.json`
+
+Each result includes:
+- OCR text for each detected field
+- Confidence scores
+- Field locations
+- Processing metadata
+
 ## LLM Prompt Template
 ```
 Please extract text from this South African ID document image and provide the results in JSON format. Include all visible text fields with exact formatting as shown in the image.
@@ -122,6 +147,11 @@ Important instructions:
 ```
 ground_truth/
 ├── raw_llm_responses/
+│   ├── new_ids/
+│   │   └── results.json
+│   └── old_ids/
+│       └── results.json
+├── ocr_results/
 │   ├── new_ids/
 │   │   └── results.json
 │   └── old_ids/

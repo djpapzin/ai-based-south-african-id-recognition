@@ -1,10 +1,25 @@
 # South African ID Document Recognition System - Setup and Usage Guide
 
-## System Requirements
+## Environment Options
+
+### 1. Google Colab (Training Environment - Completed)
+- Training phase completed
+- Model successfully trained and exported
+- No further development in Colab environment
+- All future development and testing to be done locally
+- Colab notebook preserved for reference and future retraining if needed
+
+Note: Development has transitioned to local Windows environment before final Linux server deployment.
+
+### 2. Local Development Environment
+The following instructions are for setting up the local inference environment.
+
+#### System Requirements
 - Windows operating system
 - Anaconda or Miniconda installed
 - At least 5GB of free disk space
 - Internet connection for downloading dependencies
+- (Optional) NVIDIA GPU with CUDA support
 
 ## Environment Setup
 
@@ -12,10 +27,29 @@
 ```powershell
 # Create new environment
 conda create -n detectron2_env python=3.9
-conda activate detectron2_env
 ```
 
-### 2. Install Dependencies
+### 2. Activate the Environment
+You have two options to activate and use the environment:
+
+#### Option 1: Activate the environment (Recommended)
+```powershell
+conda activate detectron2_env
+```
+After activation, you can run scripts using regular python commands:
+```powershell
+python run_batch_inference.py
+```
+
+#### Option 2: Use full path to Python executable
+If you're having issues with environment activation, you can use the full path:
+```powershell
+C:\Users\lfana\anaconda3\envs\detectron2_env\python.exe run_batch_inference.py
+```
+
+**IMPORTANT**: Always ensure you're using the correct environment before running any scripts. The scripts require specific dependencies that are only available in the `detectron2_env` environment.
+
+### 3. Install Dependencies
 Install the required packages in the following order:
 
 ```powershell
@@ -29,42 +63,73 @@ pip install 'git+https://github.com/facebookresearch/detectron2.git'
 pip install paddleocr
 pip install pytesseract
 pip install opencv-python
+pip install tqdm  # For progress bars
 ```
 
-### 3. Additional Setup
+### 4. Additional Setup
 1. Download and install Tesseract OCR:
    - Download the Windows installer from: https://github.com/UB-Mannheim/tesseract/wiki
-   - Install to the default location (Usually C:\Program Files\Tesseract-OCR)
+   - Install to the default location: `C:\Program Files\Tesseract-OCR\`
    - Add the installation directory to your system PATH
+
+### 5. Verify Installation
+Run these commands to verify your setup:
+```powershell
+# Activate environment
+conda activate detectron2_env
+
+# Verify Python version
+python --version  # Should show Python 3.9.x
+
+# Verify key packages
+python -c "import torch; print(f'PyTorch: {torch.__version__}')"
+python -c "import detectron2; print(f'Detectron2: {detectron2.__version__}')"
+python -c "from paddleocr import PaddleOCR; print('PaddleOCR: OK')"
+```
+
+## Running Scripts
+
+### Batch Inference Script
+The `run_batch_inference.py` script processes multiple ID images and generates structured output:
+
+1. **Prepare Images**:
+   - Place new ID images in: `test_dataset/new_ids/`
+   - Place old ID images in: `test_dataset/old_ids/`
+
+2. **Run the Script**:
+   ```powershell
+   # Option 1: With activated environment
+   conda activate detectron2_env
+   python run_batch_inference.py
+
+   # Option 2: Using full path
+   C:\Users\lfana\anaconda3\envs\detectron2_env\python.exe run_batch_inference.py
+   ```
+
+3. **Output**:
+   - OCR results will be saved in: `ground_truth/ocr_results/`
+   - Progress bar will show processing status
+   - Any errors will be logged to the console
+
+### Troubleshooting
+If you encounter issues:
+1. Verify you're using the correct environment
+2. Check all dependencies are installed
+3. Ensure model files are present in the `models` directory
+4. Verify Tesseract OCR is properly installed and in PATH
 
 ## Project Structure
 ```
 Machine Learning/
 ├── models/                    # Contains trained models
 │   ├── classification_model_final.pth
-│   └── model_final.pth
+│   └── model_final.pth       # Exported from Colab training
 ├── test_images/              # Directory for images to process
 ├── outputs/                  # Output directory
 │   ├── classified/          # JSON results
 │   └── text_results/        # Text format results
 ├── run_batch_inference.py    # Main inference script
 └── document_classifier.py    # Document classification module
-```
-
-## Running the Script
-
-### 1. Prepare Input Images
-- Place the ID document images you want to process in the `test_images` directory
-- Supported formats: JPG, PNG
-- Images should be clear and well-lit for best results
-
-### 2. Run the Script
-```powershell
-# Activate the environment (if not already activated)
-conda activate detectron2_env
-
-# Run the inference script
-python run_batch_inference.py
 ```
 
 ## Output Format
