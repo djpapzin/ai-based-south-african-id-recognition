@@ -6,6 +6,11 @@ from paddleocr import PaddleOCR
 import cv2
 from local_inference import run_inference, save_segments
 import re
+import logging
+from tqdm import tqdm
+
+# Configure logging to only show warnings and errors
+logging.getLogger("ppocr").setLevel(logging.WARNING)
 
 def extract_date(text):
     """Extract and format date from OCR text."""
@@ -49,7 +54,7 @@ def extract_citizenship(text, id_type):
     else:
         return 'CITIZEN'
 
-def process_ocr_results(segments, id_type):
+def process_ocr_results(segment_results, id_type):
     """Process OCR results into structured format."""
     result = {
         'id_type': id_type,
@@ -70,9 +75,37 @@ def process_ocr_results(segments, id_type):
     
     uncertain_fields = []
     
-    for segment in segments['segments']:
-        label = segment['label'].lower()
-        ocr_text = segment.get('paddle_ocr', '') or segment.get('tesseract_ocr', '')
+    # Handle both dictionary and list formats
+    if isinstance(segment_results, dict):
+        segments_list = segment_results.get('segments', {}).get('segments', [])
+    elif isinstance(segment_results, list):
+        segments_list = segment_results
+    else:
+        segments_list = []
+    
+    for segment in segments_list:
+        if not isinstance(segment, dict):
+            continue
+            
+        label = segment.get('label', '').lower()
+        
+        # Get OCR text from the segment info
+        ocr_text = ''
+        ocr_text_path = segment.get('ocr_text_path', '')
+        if ocr_text_path and os.path.exists(ocr_text_path):
+            try:
+                with open(ocr_text_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    # Extract PaddleOCR result
+                    paddle_start = content.find('PaddleOCR Result:')
+                    paddle_end = content.find('Tesseract Result:')
+                    if paddle_start != -1 and paddle_end != -1:
+                        paddle_text = content[paddle_start:paddle_end]
+                        raw_start = paddle_text.find('Raw: ')
+                        if raw_start != -1:
+                            ocr_text = paddle_text[raw_start + 5:].strip()
+            except Exception as e:
+                print(f"Error reading OCR text file: {str(e)}")
         
         if not ocr_text:
             continue
@@ -127,9 +160,10 @@ def format_results(results):
 
 def main():
     # Initialize the classifier and OCR
+    print("\nInitializing models...")
     model_path = "models/model_final.pth"
     classifier = DocumentClassifier(model_path)
-    ocr = PaddleOCR(use_angle_cls=True, lang='en')
+    ocr = PaddleOCR(use_angle_cls=True, lang='en', show_log=False)
     
     # Process both new and old IDs
     for id_type in ['new', 'old']:
@@ -146,8 +180,8 @@ def main():
         print(f"\nProcessing {len(image_files)} {id_type} ID images from {image_dir}...")
         print("-" * 50)
         
-        # Process each image
-        for image_file in image_files:
+        # Process each image with progress bar
+        for image_file in tqdm(image_files, desc=f"Processing {id_type} IDs", unit="image"):
             image_path = os.path.join(image_dir, image_file)
             try:
                 # Run Detectron2 inference and save segments
@@ -160,10 +194,8 @@ def main():
                 result['filename'] = image_file
                 results.append(result)
                 
-                print(f"Processed: {image_file}")
-                
             except Exception as e:
-                print(f"\nError processing {image_file}: {str(e)}")
+                tqdm.write(f"\nError processing {image_file}: {str(e)}")
         
         # Save results
         output_file = os.path.join(output_dir, 'results.json')
@@ -173,7 +205,9 @@ def main():
         # Create and save formatted text output
         text_output_dir = os.path.join(output_dir, 'text_results')
         os.makedirs(text_output_dir, exist_ok=True)
-        for result in results:
+        
+        print(f"\nGenerating text results...")
+        for result in tqdm(results, desc="Generating text files", unit="file"):
             text_result_file = os.path.join(text_output_dir, f"{os.path.splitext(result['filename'])[0]}.txt")
             formatted_text = format_results(result)
             
