@@ -1,24 +1,16 @@
 # South African ID Recognition System - Development Checklist
 
-## Model Development
+## Model Development (Google Colab)
 - [x] Dataset preparation
 - [x] Model architecture selection
 - [x] Initial training
 - [x] Performance evaluation
 - [x] Model fine-tuning
+- [x] Model export for local deployment
 - [ ] Automated retraining pipeline
 - [ ] Model versioning system
 
-## OCR Integration
-- [x] Tesseract OCR setup
-- [x] PaddleOCR integration
-- [x] Field-specific preprocessing
-- [x] Text cleaning implementation
-- [x] Dual OCR result comparison
-- [ ] OCR accuracy improvement
-- [ ] Custom OCR model training
-
-## Local Environment
+## Local Development Environment
 - [x] Conda environment setup
 - [x] Dependencies installation
 - [x] Inference script development
@@ -27,17 +19,26 @@
 - [ ] Progress tracking
 - [ ] Memory optimization
 
+## OCR Integration (Local)
+- [x] Tesseract OCR setup
+- [x] PaddleOCR integration
+- [x] Field-specific preprocessing
+- [x] Text cleaning implementation
+- [x] Dual OCR result comparison
+- [ ] OCR accuracy improvement
+- [ ] Custom OCR model training
+
 ## Google Colab Environment
 - [x] Training notebook setup
 - [x] GPU utilization
 - [x] Model checkpointing
 - [x] Evaluation metrics
+- [x] Results visualization
+- [x] Performance monitoring
 - [ ] Automated training pipeline
-- [ ] Results visualization
-- [ ] Performance monitoring
 
 ## Documentation
-- [x] Setup guide
+- [x] Setup guide (both environments)
 - [x] Usage instructions
 - [x] Project structure
 - [x] Input/Output formats
