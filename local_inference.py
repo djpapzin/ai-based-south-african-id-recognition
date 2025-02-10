@@ -219,249 +219,91 @@ def run_inference(image_path, model_path, confidence_threshold=0.5):
     
     return outputs
 
-def save_segments(image_path, outputs, save_dir, classification_result=None):
-    """Save detected segments and process with OCR"""
-    try:
-        # Read the image
-        image = cv2.imread(image_path)
-        if image is None:
-            raise ValueError(f"Could not read image at {image_path}")
+def save_segments(image_path, outputs, output_dir, config=None):
+    """Save detected segments and perform OCR on them."""
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Get image
+    image = cv2.imread(image_path)
+    if image is None:
+        raise ValueError(f"Could not read image: {image_path}")
+    
+    # Get predictions
+    instances = outputs["instances"].to("cpu")
+    boxes = instances.pred_boxes.tensor.numpy()
+    scores = instances.scores.numpy()
+    classes = instances.pred_classes.numpy()
+    
+    # Get metadata
+    metadata = MetadataCatalog.get("sa_id_train")
+    class_names = metadata.thing_classes
+    
+    segments = []
+    
+    # Process each detected segment
+    for box, score, class_id in zip(boxes, scores, classes):
+        x1, y1, x2, y2 = map(int, box)
+        class_name = class_names[class_id]
         
-        # Get predictions
-        predictions = outputs["instances"].to("cpu")
-        boxes = predictions.pred_boxes.tensor.numpy()
-        classes = predictions.pred_classes.numpy()
-        scores = predictions.scores.numpy()
-        
-        # Create directory for this image's segments
-        image_name = os.path.splitext(os.path.basename(image_path))[0]
-        segments_dir = os.path.join(save_dir, image_name)
-        os.makedirs(segments_dir, exist_ok=True)
-        
-        # Save detection and classification results
-        results = outputs.get("results", {})
-        results["image_path"] = image_path
-        results["segments"] = {
-            "directory": segments_dir,
-            "segments": []
+        # Create segment info
+        segment_info = {
+            'label': class_name,
+            'confidence': float(score),
+            'bbox': [int(coord) for coord in box],
+            'class_id': int(class_id)
         }
         
-        # Process each detected segment
-        for i, (box, class_id, score) in enumerate(zip(boxes, classes, scores)):
-            # Get field label
-            label = thing_classes[class_id]
+        # Extract segment image
+        segment_img = image[y1:y2, x1:x2]
+        if segment_img.size == 0:
+            continue
             
-            # Convert box coordinates to integers
-            x1, y1, x2, y2 = map(int, box)
+        # Save segment image
+        segment_filename = f"{class_name}_{len(segments)}.jpg"
+        segment_path = os.path.join(output_dir, segment_filename)
+        cv2.imwrite(segment_path, segment_img)
+        segment_info['image_path'] = segment_path
+        
+        # Save OCR results
+        ocr_text_path = os.path.join(output_dir, f"{class_name}_{len(segments)}_ocr.txt")
+        segment_info['ocr_text_path'] = ocr_text_path
+        
+        try:
+            # Run OCR on segment
+            paddle_result = ocr.ocr(segment_img, cls=True)
+            tesseract_result = pytesseract.image_to_string(segment_img)
             
-            # Crop segment from image
-            segment = image[y1:y2, x1:x2]
-            
-            # Generate base filename without extension
-            base_filename = f"{label}_{i+1}"
-            
-            # Save segment image
-            segment_path = os.path.join(segments_dir, f"{base_filename}.jpg")
-            cv2.imwrite(segment_path, segment)
-            
-            # Process with OCR and save visualization
-            ocr_results = process_segment_with_ocr(segment, label)
-            
-            # Save preprocessed and visualization images
-            if label not in ['face', 'id_document', 'signature']:
-                preprocess_path = os.path.join(segments_dir, f"{base_filename}_preprocess.jpg")
-                cv2.imwrite(preprocess_path, ocr_results['preprocess_image'])
-                
-                binary_path = os.path.join(segments_dir, f"{base_filename}_binary.jpg")
-                cv2.imwrite(binary_path, ocr_results['binary_image'])
-                
-                paddle_vis_path = os.path.join(segments_dir, f"{base_filename}_paddle_boxes.jpg")
-                cv2.imwrite(paddle_vis_path, ocr_results['paddle_vis'])
-                
-                tesseract_vis_path = os.path.join(segments_dir, f"{base_filename}_tesseract_boxes.jpg")
-                cv2.imwrite(tesseract_vis_path, ocr_results['tesseract_vis'])
-            
-            # Create OCR results text file
-            ocr_text_path = os.path.join(segments_dir, f"{base_filename}.txt")
+            # Save OCR results to text file
             with open(ocr_text_path, 'w', encoding='utf-8') as f:
-                f.write(f"Field: {label}\n")
-                f.write(f"Confidence: {score:.2%}\n")
-                if label not in ['face', 'id_document', 'signature']:
-                    f.write("\nPaddleOCR Result:\n")
-                    f.write(f"Raw: {ocr_results['paddle_ocr']}\n")
-                    f.write("\nTesseract Result:\n")
-                    f.write(f"Raw: {ocr_results['tesseract_ocr']}\n")
-            
-            # Add to results
-            segment_info = {
-                "label": label,
-                "confidence": float(score),
-                "segment_path": segment_path,
-                "ocr_text_path": ocr_text_path,
-                "coordinates": {
-                    "x1": int(x1),
-                    "y1": int(y1),
-                    "x2": int(x2),
-                    "y2": int(y2)
-                }
-            }
-            
-            if label not in ['face', 'id_document', 'signature']:
-                segment_info.update({
-                    "paddle_ocr": ocr_results['paddle_ocr'],
-                    "tesseract_ocr": ocr_results['tesseract_ocr'],
-                    "preprocess_path": preprocess_path,
-                    "binary_path": binary_path,
-                    "paddle_vis_path": paddle_vis_path,
-                    "tesseract_vis_path": tesseract_vis_path
-                })
-            
-            results["segments"]["segments"].append(segment_info)
-            
-        # Create HTML preview file
-        html_path = os.path.join(segments_dir, "preview.html")
-        with open(html_path, 'w', encoding='utf-8') as f:
-            f.write("""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Segment Results</title>
-                <style>
-                    .segment-container { 
-                        margin-bottom: 40px;
-                        border: 1px solid #ccc;
-                        padding: 20px;
-                        border-radius: 5px;
-                    }
-                    .segment-header {
-                        display: flex;
-                        justify-content: space-between;
-                        margin-bottom: 10px;
-                    }
-                    .segment-images {
-                        display: grid;
-                        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                        gap: 20px;
-                        margin-bottom: 20px;
-                    }
-                    .image-container {
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                    }
-                    .segment-image { 
-                        max-width: 100%;
-                        height: auto;
-                        margin-bottom: 5px;
-                    }
-                    .segment-text {
-                        font-family: monospace;
-                        white-space: pre-wrap;
-                        background: #f5f5f5;
-                        padding: 10px;
-                        border-radius: 5px;
-                    }
-                    h2 { color: #333; }
-                    .confidence { color: #0066cc; }
-                    .image-label {
-                        font-size: 0.9em;
-                        color: #666;
-                        text-align: center;
-                    }
-                </style>
-            </head>
-            <body>
-                <h1>ID Document Segments and OCR Results</h1>
-            """)
-            
-            # Add each segment to the HTML
-            for segment in results["segments"]["segments"]:
-                rel_img_path = os.path.relpath(segment["segment_path"], segments_dir)
-                with open(segment["ocr_text_path"], 'r', encoding='utf-8') as txt:
-                    ocr_content = txt.read()
-                
-                f.write(f"""
-                <div class="segment-container">
-                    <div class="segment-header">
-                        <h2>{segment["label"]}</h2>
-                        <p class="confidence">Confidence: {segment["confidence"]:.2%}</p>
-                    </div>
-                """)
-                
-                if segment["label"] not in ['face', 'id_document', 'signature']:
-                    # Add all visualization images
-                    f.write("""<div class="segment-images">""")
-                    
-                    # Original segment
-                    f.write(f"""
-                    <div class="image-container">
-                        <img src="{rel_img_path}" class="segment-image">
-                        <div class="image-label">Original Segment</div>
-                    </div>
-                    """)
-                    
-                    # Preprocessed image
-                    rel_preprocess_path = os.path.relpath(segment["preprocess_path"], segments_dir)
-                    f.write(f"""
-                    <div class="image-container">
-                        <img src="{rel_preprocess_path}" class="segment-image">
-                        <div class="image-label">Preprocessed</div>
-                    </div>
-                    """)
-                    
-                    # Binary image
-                    rel_binary_path = os.path.relpath(segment["binary_path"], segments_dir)
-                    f.write(f"""
-                    <div class="image-container">
-                        <img src="{rel_binary_path}" class="segment-image">
-                        <div class="image-label">Binary</div>
-                    </div>
-                    """)
-                    
-                    # PaddleOCR visualization
-                    rel_paddle_path = os.path.relpath(segment["paddle_vis_path"], segments_dir)
-                    f.write(f"""
-                    <div class="image-container">
-                        <img src="{rel_paddle_path}" class="segment-image">
-                        <div class="image-label">PaddleOCR Detections</div>
-                    </div>
-                    """)
-                    
-                    # Tesseract visualization
-                    rel_tesseract_path = os.path.relpath(segment["tesseract_vis_path"], segments_dir)
-                    f.write(f"""
-                    <div class="image-container">
-                        <img src="{rel_tesseract_path}" class="segment-image">
-                        <div class="image-label">Tesseract Detections</div>
-                    </div>
-                    """)
-                    
-                    f.write("</div>")  # Close segment-images div
-                else:
-                    # Just show the original segment for face/id_document/signature
-                    f.write(f"""
-                    <div class="image-container">
-                        <img src="{rel_img_path}" class="segment-image">
-                    </div>
-                    """)
-                
-                f.write(f"""
-                    <div class="segment-text">
-                        <pre>{ocr_content}</pre>
-                    </div>
-                </div>
-                """)
-            
-            f.write("""
-            </body>
-            </html>
-            """)
+                f.write("PaddleOCR Result:\n")
+                if paddle_result and len(paddle_result) > 0 and len(paddle_result[0]) > 0:
+                    for line in paddle_result[0]:
+                        box, (text, conf) = line
+                        f.write(f"Box: {box}\n")
+                        f.write(f"Text: {text}\n")
+                        f.write(f"Confidence: {conf}\n")
+                        f.write(f"Raw: {text}\n")
+                f.write("\nTesseract Result:\n")
+                f.write(tesseract_result)
         
-        return results
+        except Exception as e:
+            print(f"Error performing OCR on segment {segment_filename}: {str(e)}")
+            continue
         
-    except Exception as e:
-        print(f"Error saving segments: {str(e)}")
-        return {"error": str(e)}
+        segments.append(segment_info)
+    
+    # Save metadata
+    metadata_path = os.path.join(output_dir, "metadata.json")
+    metadata = {
+        'original_image': image_path,
+        'timestamp': datetime.now().isoformat(),
+        'segments': segments
+    }
+    
+    with open(metadata_path, 'w') as f:
+        json.dump(metadata, f, indent=4)
+    
+    return segments
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run local inference on ID documents')
