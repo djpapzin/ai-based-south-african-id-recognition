@@ -45,8 +45,8 @@ def clean_text(text, field_type):
         # Keep only digits
         return ''.join(c for c in text if c.isdigit())
     elif field_type in ['date_of_birth']:
-        # Keep digits and common date separators
-        return ''.join(c for c in text if c.isdigit() or c in '/-.')
+        # Keep the original date format, just clean extra whitespace
+        return ' '.join(text.split())
     else:
         # Remove extra whitespace and newlines
         return ' '.join(text.split())
