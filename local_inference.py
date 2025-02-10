@@ -13,12 +13,17 @@ from paddleocr import PaddleOCR
 from document_classifier import DocumentClassifier
 import numpy as np
 import argparse
+import logging
+
+# Configure logging
+logging.getLogger("detectron2").setLevel(logging.WARNING)
+logging.getLogger("fvcore").setLevel(logging.WARNING)
 
 # Set Tesseract executable path
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 # Initialize OCR engines
-ocr = PaddleOCR(use_angle_cls=True, lang='en')
+ocr = PaddleOCR(use_angle_cls=True, lang='en', show_log=False)
 
 # Initialize document classifier
 document_classifier = DocumentClassifier('models/classification_model_final.pth')
@@ -69,7 +74,7 @@ def process_segment_with_ocr(segment_img, label):
     
     # PaddleOCR
     try:
-        ocr = PaddleOCR(use_angle_cls=True, lang='en')
+        ocr = PaddleOCR(use_angle_cls=True, lang='en', show_log=False)
         paddle_result = ocr.ocr(binary, cls=True)
         
         # Extract text and boxes
@@ -130,7 +135,7 @@ def process_segment_with_ocr(segment_img, label):
 def process_segment_with_ocr_segment_path(segment_path, field_type):
     """Process a segment with OCR based on field type"""
     # Initialize PaddleOCR
-    ocr = PaddleOCR(use_angle_cls=True, lang='en')
+    ocr = PaddleOCR(use_angle_cls=True, lang='en', show_log=False)
     
     # Read the image
     image = cv2.imread(segment_path)
