@@ -77,7 +77,9 @@ def process_ocr_results(segment_results, id_type):
     
     # Handle both dictionary and list formats
     if isinstance(segment_results, dict):
-        segments_list = segment_results.get('segments', {}).get('segments', [])
+        segments_list = segment_results.get('segments', [])
+        if isinstance(segments_list, dict):
+            segments_list = segments_list.get('segments', [])
     elif isinstance(segment_results, list):
         segments_list = segment_results
     else:
@@ -104,6 +106,11 @@ def process_ocr_results(segment_results, id_type):
                         raw_start = paddle_text.find('Raw: ')
                         if raw_start != -1:
                             ocr_text = paddle_text[raw_start + 5:].strip()
+                        else:
+                            # If no PaddleOCR result, try Tesseract
+                            tesseract_text = content[paddle_end:].strip()
+                            if tesseract_text:
+                                ocr_text = tesseract_text.replace('Tesseract Result:', '').strip()
             except Exception as e:
                 print(f"Error reading OCR text file: {str(e)}")
         

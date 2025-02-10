@@ -291,21 +291,39 @@ def save_segments(image_path, outputs, output_dir, config=None):
             paddle_result = ocr.ocr(segment_img, cls=True)
             tesseract_result = pytesseract.image_to_string(segment_img)
             
-            # Save OCR results to text file
+            # Initialize OCR text content
+            ocr_content = []
+            ocr_content.append("PaddleOCR Result:")
+            
+            # Process PaddleOCR results safely
+            if paddle_result and isinstance(paddle_result, list):
+                for line_result in paddle_result:
+                    if line_result and isinstance(line_result, list) and len(line_result) > 0:
+                        for line in line_result:
+                            if isinstance(line, tuple) and len(line) == 2:
+                                box, (text, conf) = line
+                                ocr_content.extend([
+                                    f"Box: {box}",
+                                    f"Text: {text}",
+                                    f"Confidence: {conf}",
+                                    f"Raw: {text}"
+                                ])
+            
+            # Add Tesseract results
+            ocr_content.extend([
+                "\nTesseract Result:",
+                tesseract_result if tesseract_result else "No text detected"
+            ])
+            
+            # Save OCR results to file
             with open(ocr_text_path, 'w', encoding='utf-8') as f:
-                f.write("PaddleOCR Result:\n")
-                if paddle_result and len(paddle_result) > 0 and len(paddle_result[0]) > 0:
-                    for line in paddle_result[0]:
-                        box, (text, conf) = line
-                        f.write(f"Box: {box}\n")
-                        f.write(f"Text: {text}\n")
-                        f.write(f"Confidence: {conf}\n")
-                        f.write(f"Raw: {text}\n")
-                f.write("\nTesseract Result:\n")
-                f.write(tesseract_result)
-        
+                f.write('\n'.join(ocr_content))
+            
         except Exception as e:
             print(f"Error performing OCR on segment {segment_filename}: {str(e)}")
+            # Write error to OCR file
+            with open(ocr_text_path, 'w', encoding='utf-8') as f:
+                f.write(f"Error during OCR processing: {str(e)}\n")
             continue
         
         segments.append(segment_info)
