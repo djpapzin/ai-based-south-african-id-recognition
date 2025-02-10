@@ -80,3 +80,5 @@ cleaned_data/
 dj_object_detection_dataset/
 labelstudio-temp/
 labelstudio_data/
+test_dataset/
+test_results/
